@@ -16,12 +16,13 @@
   "files": [
     "bin",
     "src",
+    "scripts",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test",
-    "lint": "node --check bin/velocity.js && node --check src/*.js && node --check src/*.cjs && node --check src/rules/*.js",
+    "lint": "node scripts/check-syntax.js",
     "check": "npm run lint && npm test && node bin/velocity.js check . --no-color",
     "demo": "node bin/velocity.js analyze examples/problematic-api --no-color",
     "prepublishOnly": "npm run check"
