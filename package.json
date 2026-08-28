@@ -1,0 +1,53 @@
+{
+  "name": "@wessyu/velocity",
+  "version": "0.1.0",
+  "description": "Performance diagnostics and benchmarks for JavaScript and TypeScript projects.",
+  "type": "module",
+  "bin": {
+    "velocity": "./bin/velocity.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "types": "./src/index.d.ts",
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "lint": "node --check bin/velocity.js && node --check src/*.js && node --check src/*.cjs && node --check src/rules/*.js",
+    "check": "npm run lint && npm test && node bin/velocity.js check . --no-color",
+    "demo": "node bin/velocity.js analyze examples/problematic-api --no-color",
+    "prepublishOnly": "npm run check"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "performance",
+    "javascript",
+    "typescript",
+    "profiling",
+    "benchmark",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "WessYu",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WessYu/velocity.git"
+  },
+  "homepage": "https://github.com/WessYu/velocity#readme",
+  "bugs": {
+    "url": "https://github.com/WessYu/velocity/issues"
+  }
+}
