@@ -14,7 +14,14 @@ It works with browser code, Node.js services, APIs, workers, scripts and librari
 
 ## Install
 
-Run without installing:
+The first npm release is being prepared. The current version can already be installed directly from GitHub:
+
+```bash
+npm install --save-dev github:WessYu/velocity
+npx velocity analyze .
+```
+
+After the npm release is available, run without installing:
 
 ```bash
 npx @wessyu/velocity analyze .
