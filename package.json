@@ -38,10 +38,16 @@
   },
   "keywords": [
     "performance",
+    "web-performance",
     "javascript",
     "typescript",
     "profiling",
     "benchmark",
+    "bundle-analysis",
+    "performance-budget",
+    "regression-testing",
+    "core-web-vitals",
+    "sarif",
     "cli"
   ],
   "license": "MIT",
