@@ -5,7 +5,7 @@
   <a href="https://github.com/WessYu/velocity/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/WessYu/velocity/ci.yml?branch=main&label=CI&logo=github"></a>
   <img alt="Node.js 20+" src="https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <img alt="npm provenance" src="https://img.shields.io/badge/npm-provenance-enabled-5C2D91">
+  <img alt="npm provenance" src="https://img.shields.io/badge/provenance-enabled-5C2D91?logo=npm&logoColor=white">
 </p>
 
 **Performance gates for JavaScript and TypeScript projects — from source code to real runtime behavior.**
