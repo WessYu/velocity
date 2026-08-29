@@ -11,7 +11,7 @@ export async function temporaryFixture(name) {
   await symlink(path.join(repositoryRoot, "node_modules"), path.join(temporary, "node_modules"), process.platform === "win32" ? "junction" : "dir");
   const packageFile = path.join(temporary, "package.json");
   const manifest = JSON.parse(await readFile(packageFile, "utf8"));
-  const executable = (relative) => path.join(repositoryRoot, "node_modules", relative).replaceAll("\\", "/");
+  const executable = (relative) => `node_modules/${relative}`;
   if (name === "vite-app") manifest.scripts.build = `node "${executable("vite/bin/vite.js")}" build`;
   if (name === "next-app") manifest.scripts.build = `node "${executable("next/dist/bin/next")}" build --webpack`;
   manifest.scripts.typecheck = `node "${executable("typescript/bin/tsc")}" --noEmit --allowJs --checkJs --jsx react-jsx --module NodeNext --moduleResolution NodeNext --target ES2022 ${name === "vite-app" ? "src/main.jsx src/App.jsx" : "app/layout.jsx app/page.jsx"}`;
