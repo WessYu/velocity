@@ -5,6 +5,9 @@ Find performance risks, measure real behavior, and prevent regressions in JavaSc
 Velocity is a local CLI and ESM API for three related jobs:
 
 - parser-backed static analysis for likely performance risks;
+- real React, Vite, and Next.js bundle measurement with raw, gzip, and Brotli sizes;
+- Chromium load measurement for FCP, LCP, CLS, TBT, Speed Index, TTFB, requests, and bytes;
+- reviewable, explicitly authorized optimizations with scoped snapshots and rollback;
 - reproducible command benchmarks with environment-aware comparisons;
 - direct Node.js process profiling for CPU, memory, and event-loop behavior.
 
@@ -18,6 +21,41 @@ Requires Node.js 20, 22, or 24.
 npm install --save-dev @wess2001/velocity
 npx velocity analyze .
 ```
+
+## Build, load, optimize, and verify
+
+Measure a production build and enforce bundle budgets:
+
+```bash
+velocity build . --save .velocity/build-before.json \
+  --max-initial-js 250 --max-total-js 600 --max-css 100 --max-chunk 200
+velocity build . --compare .velocity/build-before.json --max-regression 2
+```
+
+Velocity detects Vite, React, and Next.js, runs the declared build unless `--no-build` is set, reads framework manifests, identifies initial and route chunks, and measures every emitted JavaScript, CSS, image, font, and other asset in raw, gzip, and Brotli bytes. Next.js `public/` assets are included.
+
+Measure an actual URL in Chromium:
+
+```bash
+velocity load https://localhost:4173 --device mobile --runs 3 \
+  --timeout 30000 --save .velocity/load-before.json
+velocity load https://localhost:4173 --device desktop --runs 3 \
+  --compare .velocity/load-desktop-before.json --margin 5
+```
+
+`load` reports measured values separately from threshold-based recommendations. TBT is calculated from lab long tasks and is always labeled as TBT; it is never presented as INP. Mobile runs use explicit network and CPU throttling. Speed Index is calculated from a 200 ms PNG filmstrip.
+
+Optimization is dry-run by default:
+
+```bash
+velocity optimize .
+velocity optimize . --apply --fix size-image-0123456789ab
+velocity verify .
+```
+
+Every proposed change includes its classification (`safe-fix`, `measured-fix`, `review-required`, or `recommendation`), evidence, expected impact, risk, affected files, and unified diff. `--apply` requires each optimization ID explicitly. Velocity snapshots only affected files, checks that patch context has not changed, and runs build, typecheck, and tests. It never invokes `git reset`. On failure it restores only files changed by the current Velocity run. A `measured-fix` is also restored when the before/after build does not prove improvement above the configured noise margin.
+
+`verify --before report.json --after report.json` compares saved build or load reports and returns `improved`, `unchanged`, `inconclusive`, `regressed`, or `failed`.
 
 Typical output:
 
@@ -151,11 +189,18 @@ It records process duration, user/system CPU, final RSS, sampled peak RSS, final
 ```js
 import {
   analyzeProject,
+  analyzeBuild,
+  applyOptimizations,
   benchmark,
+  compareBuilds,
   compareBenchmarks,
+  compareLoads,
   compareReports,
+  createOptimizationPlan,
+  measureLoad,
   profileNodeProcess,
-  toSarif
+  toSarif,
+  verifyProject
 } from "@wess2001/velocity";
 
 const report = await analyzeProject(".");
@@ -171,6 +216,10 @@ The package exposes only documented ESM entry points and ships synchronized Type
 | --- | --- |
 | `analyze [path]` | Report static performance risks |
 | `check [path]` | Enforce severity and score budgets |
+| `build [path]` | Build, measure assets, compare baselines, and enforce bundle budgets |
+| `load <url>` | Collect repeated real-browser lab measurements |
+| `optimize [path]` | Produce a dry-run plan or apply explicitly selected patches |
+| `verify [path]` | Classify a saved comparison or the latest optimization run |
 | `compare <baseline> [path]` | Enforce new-finding budgets |
 | `bench -- <command>` | Measure and optionally compare a command |
 | `profile -- <node-command>` | Profile one direct Node.js process |
@@ -192,7 +241,7 @@ stdout contains the requested result. Errors and diagnostics use stderr. JSON an
 - `async/no-await-in-loop` is contextual. Sequential iteration may be correct for ordering, rate limits, dependencies, or bounded memory; Velocity never recommends unbounded `Promise.all()` as a universal fix.
 - Benchmark results depend on machine load, power state, caches, and environment. Use controlled runners and enough samples.
 - The profiler covers the main Node process. Child processes write isolated data but are not aggregated.
-- Velocity has no telemetry, network service, automatic rewrites, plugin API, or hidden uploads.
+- Velocity has no telemetry, hosted service, plugin API, or hidden uploads. Its only source rewrites are explicit `optimize --apply --fix <id>` selections with scoped snapshots.
 
 ## Development and release readiness
 

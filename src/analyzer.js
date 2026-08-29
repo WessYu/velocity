@@ -61,7 +61,7 @@ export async function analyzeProject(target = process.cwd(), options = {}) {
   const rootDirectory = metadata.isFile() ? path.dirname(root) : root;
   const loaded = await loadConfig(root);
   const overrideInput = options.config ?? {};
-  const config = mergeConfig({ ...loaded.config, ...overrideInput, rules: { ...loaded.config.rules, ...(overrideInput.rules ?? {}) } });
+  const config = mergeConfig({ ...loaded.config, ...overrideInput, rules: { ...loaded.config.rules, ...(overrideInput.rules ?? {}) }, bundleBudgets: { ...loaded.config.bundleBudgets, ...(overrideInput.bundleBudgets ?? {}) } });
   const discovery = await discoverSourceFiles(root, config.ignore);
   const project = await detectProject(rootDirectory, discovery.files);
   const results = await mapWithConcurrency(discovery.files, 8, (file) => analyzeFile(file, rootDirectory, config));

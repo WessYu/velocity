@@ -1,6 +1,6 @@
 {
   "name": "@wess2001/velocity",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Find performance risks, measure real behavior, and prevent regressions in JavaScript and TypeScript projects.",
   "type": "module",
   "bin": {
@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=70",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=85",
     "lint": "eslint bin src test examples eslint.config.js",
     "typecheck": "tsc --noEmit --allowJs --checkJs --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.js src/index.d.ts",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && node bin/velocity.js check . --no-color",
@@ -59,12 +59,19 @@
     "url": "https://github.com/WessYu/velocity/issues"
   },
   "dependencies": {
-    "@babel/parser": "^7.28.3"
+    "@babel/parser": "^7.28.3",
+    "diff": "^9.0.0",
+    "playwright-core": "^1.62.1",
+    "pngjs": "^7.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
     "@types/node": "^24.3.0",
     "eslint": "^10.0.0",
-    "typescript": "^5.9.2"
+    "next": "^16.3.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.2",
+    "vite": "^7.3.6"
   }
 }

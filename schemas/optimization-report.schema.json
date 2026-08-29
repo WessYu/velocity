@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/optimization-report.schema.json",
+  "title": "Velocity optimization plan or run",
+  "type": "object",
+  "required": ["schemaVersion", "kind"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "enum": ["optimization-plan", "optimization-run", "verification"] },
+    "optimizations": { "type": "array", "items": { "$ref": "#/$defs/optimization" } },
+    "classification": { "enum": ["improved", "unchanged", "inconclusive", "regressed", "failed"] }
+  },
+  "$defs": {
+    "optimization": {
+      "type": "object",
+      "required": ["id", "classification", "evidence", "expectedImpact", "risk", "files"],
+      "properties": {
+        "classification": { "enum": ["safe-fix", "measured-fix", "review-required", "recommendation"] },
+        "files": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -54,3 +54,74 @@ export function formatBenchmarkComparison(comparison) {
   for (const warning of comparison.warnings) lines.push(`warning  ${warning}`);
   return lines.join("\n");
 }
+
+function kib(value) { return `${(value / 1024).toFixed(1)} KiB`; }
+function changePercent(value) { return `${value >= 0 ? "+" : ""}${Number.isFinite(value) ? value.toFixed(1) : "infinite"}%`; }
+
+export function formatBuild(report) {
+  const rows = [
+    ["initial JavaScript", report.summary.initialJavaScript],
+    ["all JavaScript", report.summary.javascript],
+    ["CSS", report.summary.css],
+    ["images", report.summary.images],
+    ["fonts", report.summary.fonts],
+    ["all assets", report.summary.total]
+  ];
+  const output = [`Velocity build measurement - ${report.framework}`, `output ${report.outputDirectory}`, "", "category             raw        gzip       Brotli"];
+  for (const [label, size] of rows) output.push(`${label.padEnd(20)} ${kib(size.rawBytes).padStart(10)} ${kib(size.gzipBytes).padStart(10)} ${kib(size.brotliBytes).padStart(10)}`);
+  output.push("", `${report.artifacts.length} assets - ${report.insights.chunks.length} JavaScript chunks - ${report.insights.routes.length} routes`);
+  for (const violation of report.budgetViolations) output.push(`BUDGET FAILED ${violation.label}: ${violation.actualKb.toFixed(1)} KiB > ${violation.limitKb.toFixed(1)} KiB`);
+  return output.join("\n");
+}
+
+export function formatBuildComparison(comparison) {
+  const output = ["Velocity build comparison"];
+  for (const [name, metric] of Object.entries(comparison.metrics)) output.push(`${name.padEnd(28)} ${kib(metric.before)} -> ${kib(metric.after)} (${changePercent(metric.changePercent)})`);
+  for (const violation of comparison.budgetViolations) output.push(`BUDGET FAILED ${violation.label}: ${violation.actualKb.toFixed(1)} KiB > ${violation.limitKb.toFixed(1)} KiB`);
+  return output.join("\n");
+}
+
+export function formatLoad(report) {
+  const labels = { fcpMs: "FCP", lcpMs: "LCP", cls: "CLS", tbtMs: "TBT (lab, not INP)", speedIndexMs: "Speed Index", ttfbMs: "TTFB", requests: "Requests", transferBytes: "Transferred bytes" };
+  const output = [`Velocity browser load - ${report.device}`, `${report.url} - ${report.runs} measured run${report.runs === 1 ? "" : "s"}`, "", "Measured metrics"];
+  for (const [key, label] of Object.entries(labels)) {
+    const value = report.measured[key];
+    const formatted = key === "cls" ? value.toFixed(3) : key === "requests" ? value.toFixed(0) : key === "transferBytes" ? kib(value) : `${value.toFixed(0)} ms`;
+    output.push(`${label.padEnd(22)} ${formatted}${report.metrics[key].coefficientOfVariation > 0.2 ? " (unstable)" : ""}`);
+  }
+  output.push("", "Recommendations (not measured metrics)");
+  if (!report.recommendations.length) output.push("No threshold-based recommendations.");
+  for (const item of report.recommendations) output.push(`- ${item.title}: ${item.recommendation}`);
+  return output.join("\n");
+}
+
+export function formatLoadComparison(comparison) {
+  const output = [`Velocity load comparison - ${comparison.classification}`];
+  for (const [name, metric] of Object.entries(comparison.metrics)) output.push(`${name.padEnd(20)} ${metric.before.toFixed(2)} -> ${metric.after.toFixed(2)} (${changePercent(metric.changePercent)})`);
+  return output.join("\n");
+}
+
+export function formatOptimizationPlan(plan) {
+  const output = [`Velocity optimization dry-run - ${plan.framework}`, `${plan.evidence.sourceFiles} source files - ${plan.optimizations.length} reviewable changes - ${plan.findings.length} recommendations`];
+  for (const item of plan.optimizations) {
+    output.push("", `[${item.classification}] ${item.id} - ${item.title}`, `evidence: ${item.evidence}`, `impact: ${item.expectedImpact}`, `risk: ${item.risk}`, `files: ${item.files.join(", ")}`);
+    if (item.diff) output.push(item.diff.trimEnd());
+  }
+  for (const item of plan.findings) output.push("", `[${item.classification}] ${item.id}${item.file ? ` - ${item.file}${item.line ? `:${item.line}` : ""}` : ""}`, `evidence: ${item.evidence}`, `recommendation: ${item.recommendation}`);
+  return output.join("\n");
+}
+
+export function formatOptimizationRun(run) {
+  const output = [`Velocity optimization apply - ${run.verification.classification}`, `run ${run.id}`, `authorized ${run.selected.map((item) => item.id).join(", ")}`, `rolled back ${run.rolledBack.length ? run.rolledBack.join(", ") : "none"}`, `snapshot ${run.snapshot}`];
+  for (const step of run.validation?.steps ?? []) output.push(`${step.name.padEnd(10)} ${step.status}`);
+  if (run.verification.reason) output.push(run.verification.reason);
+  return output.join("\n");
+}
+
+export function formatVerification(result) {
+  const output = [`Velocity verification - ${result.classification}`];
+  if (result.reason) output.push(result.reason);
+  if (result.metric) output.push(`${result.metric.before} -> ${result.metric.after} (${changePercent(result.metric.changePercent)})`);
+  if (result.rolledBack?.length) output.push(`rolled back: ${result.rolledBack.join(", ")}`);
+  return output.join("\n");
+}

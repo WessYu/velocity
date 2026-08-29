@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/load-report.schema.json",
+  "title": "Velocity browser load report",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "url", "device", "samples", "metrics", "measured", "recommendations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "load" },
+    "device": { "enum": ["mobile", "desktop"] },
+    "url": { "type": "string", "format": "uri" },
+    "samples": { "type": "array", "minItems": 1 },
+    "metrics": { "type": "object" },
+    "measured": { "type": "object", "required": ["fcpMs", "lcpMs", "cls", "tbtMs", "speedIndexMs", "ttfbMs", "requests", "transferBytes"] },
+    "recommendations": { "type": "array", "items": { "type": "object", "properties": { "measured": { "const": false } } } }
+  }
+}

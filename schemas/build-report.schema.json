@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/build-report.schema.json",
+  "title": "Velocity build report",
+  "type": "object",
+  "required": ["schemaVersion", "kind", "framework", "artifacts", "summary", "insights", "budgetViolations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "build" },
+    "framework": { "enum": ["React", "Vite", "Next.js", "JavaScript"] },
+    "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+    "summary": { "type": "object" },
+    "insights": { "type": "object" },
+    "budgetViolations": { "type": "array" }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["file", "category", "rawBytes", "gzipBytes", "brotliBytes", "initial"],
+      "properties": {
+        "file": { "type": "string" },
+        "category": { "enum": ["javascript", "css", "image", "font", "asset"] },
+        "rawBytes": { "type": "integer", "minimum": 0 },
+        "gzipBytes": { "type": "integer", "minimum": 0 },
+        "brotliBytes": { "type": "integer", "minimum": 0 },
+        "initial": { "type": "boolean" }
+      }
+    }
+  }
+}

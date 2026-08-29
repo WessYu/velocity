@@ -8,11 +8,13 @@ export const defaultConfig = Object.freeze({
   maxFileSizeKb: 250,
   failOn: "error",
   rules: Object.freeze(Object.fromEntries(allRules.map((rule) => [rule.id, rule.defaultSeverity]))),
-  ignore: Object.freeze(defaultIgnore)
+  ignore: Object.freeze(defaultIgnore),
+  bundleBudgets: Object.freeze({})
 });
 
-const allowedKeys = new Set(["$schema", "minScore", "maxFileSizeKb", "failOn", "rules", "ignore"]);
+const allowedKeys = new Set(["$schema", "minScore", "maxFileSizeKb", "failOn", "rules", "ignore", "bundleBudgets"]);
 const settings = new Set(["off", "info", "warning", "error"]);
+const budgetKeys = new Set(["maxInitialJavaScriptKb", "maxTotalJavaScriptKb", "maxCssKb", "maxAssetKb", "maxChunkKb"]);
 
 export class ConfigError extends Error {
   constructor(propertyPath, message) {
@@ -35,12 +37,18 @@ export function mergeConfig(input = {}) {
     if (!ruleById.has(ruleId)) throw new ConfigError(`$.rules.${ruleId}`, "unknown rule ID");
     if (!settings.has(value)) throw new ConfigError(`$.rules.${ruleId}`, "must be off, info, warning, or error");
   }
+  if ("bundleBudgets" in input && (!input.bundleBudgets || typeof input.bundleBudgets !== "object" || Array.isArray(input.bundleBudgets))) throw new ConfigError("$.bundleBudgets", "must be an object");
+  for (const [key, value] of Object.entries(input.bundleBudgets ?? {})) {
+    if (!budgetKeys.has(key)) throw new ConfigError(`$.bundleBudgets.${key}`, "unknown bundle budget");
+    if (!Number.isFinite(value) || value <= 0) throw new ConfigError(`$.bundleBudgets.${key}`, "must be a positive number in KiB");
+  }
   return {
     minScore: input.minScore ?? defaultConfig.minScore,
     maxFileSizeKb: input.maxFileSizeKb ?? defaultConfig.maxFileSizeKb,
     failOn: input.failOn ?? defaultConfig.failOn,
     rules: { ...defaultConfig.rules, ...(input.rules ?? {}) },
-    ignore: [...(input.ignore ?? defaultConfig.ignore)]
+    ignore: [...(input.ignore ?? defaultConfig.ignore)],
+    bundleBudgets: { ...(input.bundleBudgets ?? defaultConfig.bundleBudgets) }
   };
 }
 

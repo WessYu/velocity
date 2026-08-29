@@ -1,0 +1,5 @@
+:root { font-family: system-ui, sans-serif; color: #e2e8f0; background: #0f172a; }
+body { margin: 0; }
+main { max-width: 70rem; margin: auto; padding: 3rem; }
+img { display: block; width: 100%; height: auto; }
+section { margin-top: 100vh; }

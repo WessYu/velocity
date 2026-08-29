@@ -1,0 +1,15 @@
+{
+  "name": "velocity-vite-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../../node_modules/vite/bin/vite.js build",
+    "typecheck": "node ../../../node_modules/typescript/bin/tsc --noEmit --allowJs --checkJs --jsx react-jsx --module NodeNext --moduleResolution NodeNext --target ES2022 src/main.jsx src/App.jsx",
+    "test": "node --test test/app.test.js"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "vite": "^7.1.0"
+  }
+}

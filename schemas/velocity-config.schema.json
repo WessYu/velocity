@@ -10,6 +10,17 @@
     "maxFileSizeKb": { "type": "number", "exclusiveMinimum": 0, "default": 250 },
     "failOn": { "enum": ["off", "info", "warning", "error"], "default": "error" },
     "ignore": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "bundleBudgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxInitialJavaScriptKb": { "$ref": "#/$defs/positiveKb" },
+        "maxTotalJavaScriptKb": { "$ref": "#/$defs/positiveKb" },
+        "maxCssKb": { "$ref": "#/$defs/positiveKb" },
+        "maxAssetKb": { "$ref": "#/$defs/positiveKb" },
+        "maxChunkKb": { "$ref": "#/$defs/positiveKb" }
+      }
+    },
     "rules": {
       "type": "object",
       "additionalProperties": false,
@@ -26,5 +37,5 @@
       }
     }
   },
-  "$defs": { "ruleSetting": { "enum": ["off", "info", "warning", "error"] } }
+  "$defs": { "ruleSetting": { "enum": ["off", "info", "warning", "error"] }, "positiveKb": { "type": "number", "exclusiveMinimum": 0 } }
 }

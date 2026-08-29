@@ -21,6 +21,44 @@ test("prints package version, global help and command help", async () => {
   assert.equal((await run(["--version"])).stdout.trim(), manifest.version);
   assert.match((await run(["--help"])).stdout, /config --print/);
   assert.match((await run(["bench", "--help"])).stdout, /-- <command>/);
+  for (const command of ["build", "load", "optimize", "verify"]) assert.match((await run([command, "--help"])).stdout, new RegExp(`velocity ${command}`));
+});
+
+test("runs build save/compare and bundle budgets through the CLI", async () => {
+  const fixture = path.resolve("test/fixtures/vite-app");
+  const directory = await mkdtemp(path.join(tmpdir(), "velocity-build-cli-"));
+  const baseline = path.join(directory, "baseline.json");
+  const first = await run(["build", fixture, "--no-build", "--save", baseline, "--json"]);
+  assert.equal(first.code, 0, first.stderr);
+  assert.equal(JSON.parse(first.stdout).kind, "build");
+  const compared = await run(["build", fixture, "--no-build", "--compare", baseline, "--json"]);
+  assert.equal(compared.code, 0, compared.stderr);
+  assert.equal(JSON.parse(compared.stdout).kind, "build-comparison");
+  const budget = await run(["build", fixture, "--no-build", "--max-initial-js", "1", "--json"]);
+  assert.equal(budget.code, 1);
+  assert.ok(JSON.parse(budget.stdout).budgetViolations.length > 0);
+});
+
+test("runs optimization dry-run by default and verifies saved reports", async () => {
+  const fixture = path.resolve("test/fixtures/vite-app");
+  const dryRun = await run(["optimize", fixture, "--json"]);
+  assert.equal(dryRun.code, 0, dryRun.stderr);
+  assert.equal(JSON.parse(dryRun.stdout).mode, "dry-run");
+  const directory = await mkdtemp(path.join(tmpdir(), "velocity-verify-cli-"));
+  const base = { schemaVersion: 1, kind: "build", adapter: { adapter: "vite" }, summary: { initialJavaScript: { rawBytes: 100, brotliBytes: 100 }, javascript: { rawBytes: 100 }, css: { rawBytes: 0 }, total: { rawBytes: 100 } }, budgetViolations: [] };
+  const before = path.join(directory, "before.json"); const after = path.join(directory, "after.json");
+  await writeFile(before, JSON.stringify(base)); await writeFile(after, JSON.stringify(base));
+  const verified = await run(["verify", fixture, "--before", before, "--after", after, "--json"]);
+  assert.equal(verified.code, 0, verified.stderr);
+  assert.equal(JSON.parse(verified.stdout).classification, "unchanged");
+});
+
+test("requires explicit fixes for apply and paired reports for verify", async () => {
+  const fixture = path.resolve("test/fixtures/vite-app");
+  const apply = await run(["optimize", fixture, "--apply", "--json"]);
+  assert.equal(apply.code, 2); assert.match(apply.stderr, /explicit --fix/);
+  const verify = await run(["verify", fixture, "--before", "one.json"]);
+  assert.equal(verify.code, 2); assert.match(verify.stderr, /provided together/);
 });
 
 test("rejects unknown flags and invalid values on stderr with usage exit code", async () => {

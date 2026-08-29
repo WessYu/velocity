@@ -12,7 +12,7 @@ const nodeGlobals = {
 };
 
 export default [
-  { ignores: ["node_modules/**", "coverage/**", ".velocity/**"] },
+  { ignores: ["node_modules/**", "coverage/**", ".velocity/**", "**/.next/**", "**/dist/**", "**/build/**"] },
   js.configs.recommended,
   {
     files: ["**/*.js", "**/*.mjs", "**/*.cjs"],
