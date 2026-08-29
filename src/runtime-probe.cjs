@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const { monitorEventLoopDelay, performance } = require("node:perf_hooks");
+const { setImmediate } = require("node:timers");
 
 const outputPrefix = process.env.VELOCITY_PROFILE_PREFIX;
 const outputPath = outputPrefix ? `${outputPrefix}-${process.pid}.json` : null;
