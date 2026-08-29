@@ -1,5 +1,9 @@
 # Velocity
 
+<p align="center">
+  <img src="./assets/velocity-hero.svg" alt="Velocity terminal hero showing the command npx @wess2001/velocity analyze ." width="100%" />
+</p>
+
 **Find JavaScript performance risks, measure real Node.js runtime behavior, and stop regressions before they reach production.**
 
 Velocity combines three workflows that normally require separate tools:
@@ -14,23 +18,22 @@ It works with browser code, Node.js services, APIs, workers, scripts and librari
 
 ## Install
 
-The first npm release is being prepared. The current version can already be installed directly from GitHub:
+Run directly with npm:
 
 ```bash
-npm install --save-dev github:WessYu/velocity
+npx @wess2001/velocity analyze .
+```
+
+Or install it in a project:
+
+```bash
+npm install --save-dev @wess2001/velocity
+```
+
+Then use the local binary:
+
+```bash
 npx velocity analyze .
-```
-
-After the npm release is available, run without installing:
-
-```bash
-npx @wessyu/velocity analyze .
-```
-
-Or keep it in a project:
-
-```bash
-npm install --save-dev @wessyu/velocity
 ```
 
 ## Static performance diagnostics
@@ -172,7 +175,7 @@ import {
   compareBenchmarks,
   compareReports,
   profileNodeProcess
-} from "@wessyu/velocity";
+} from "@wess2001/velocity";
 
 const report = await analyzeProject(".");
 const timing = await benchmark("node", ["server.js"], { runs: 10 });
