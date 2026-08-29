@@ -1,0 +1,91 @@
+name: Publish npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version to publish (must match package.json)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish @wess2001/velocity
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Use an npm CLI with Trusted Publishing support
+        run: npm install --global 'npm@^11.5.1'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Validate requested version
+        id: package
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          package_version=$(node -p "require('./package.json').version")
+
+          if [ "$RELEASE_VERSION" != "$package_version" ]; then
+            echo "Requested version $RELEASE_VERSION does not match package.json version $package_version" >&2
+            exit 1
+          fi
+
+          if npm view "$package_name@$package_version" version >/dev/null 2>&1; then
+            echo "$package_name@$package_version is already published" >&2
+            exit 1
+          fi
+
+          echo "name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Run release checks
+        run: npm run check
+
+      - name: Inspect package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        run: npm publish --access public
+
+      - name: Build GitHub release notes from changelog
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          awk -v version="$PACKAGE_VERSION" '
+            $0 ~ "^## " version " " { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+
+          if [ ! -s release-notes.md ]; then
+            echo "No changelog section found for $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          gh release create "v$PACKAGE_VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "Velocity v$PACKAGE_VERSION" \
+            --notes-file release-notes.md
