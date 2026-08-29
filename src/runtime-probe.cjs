@@ -66,10 +66,11 @@ if (outputPath) {
   process.once("exit", finalize);
   for (const signal of ["SIGINT", "SIGTERM"]) {
     if (process.listenerCount(signal) > 0) continue;
-    process.once(signal, () => {
-      if (process.listenerCount(signal) > 0) return;
+    const preserveSignalExit = () => {
       finalize();
+      process.removeListener(signal, preserveSignalExit);
       process.kill(process.pid, signal);
-    });
+    };
+    process.once(signal, preserveSignalExit);
   }
 }

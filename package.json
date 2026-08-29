@@ -25,9 +25,9 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=85",
-    "lint": "eslint bin src test examples eslint.config.js",
+    "test": "node scripts/run-tests.js",
+    "test:coverage": "node scripts/run-tests.js --experimental-test-coverage --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=85",
+    "lint": "eslint bin src test examples scripts eslint.config.js",
     "typecheck": "tsc --noEmit --allowJs --checkJs --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.js src/index.d.ts",
     "check": "npm run lint && npm run typecheck && npm run test:coverage && node bin/velocity.js check . --no-color",
     "demo": "node bin/velocity.js analyze examples/problematic-api --no-color",

@@ -1,5 +1,9 @@
 node_modules/
 coverage/
+dist/
+build/
+.next/
+out/
 deliverables/
 .velocity/
 *.tgz
