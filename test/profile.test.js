@@ -28,7 +28,7 @@ test("records a target signal without racing natural process exit", { skip: proc
 });
 
 test("does not override application-owned signal handling", { skip: process.platform === "win32" }, async () => {
-  const source = "process.once('SIGTERM', () => { process.exitCode = 7; }); setTimeout(() => process.kill(process.pid, 'SIGTERM'), 10); setTimeout(() => {}, 25);";
+  const source = "process.once('SIGTERM', () => process.exit(7)); setTimeout(() => process.kill(process.pid, 'SIGTERM'), 20); setTimeout(() => process.exit(9), 1000);";
   const result = await profileNodeProcess(process.execPath, ["-e", source], { stdio: "ignore" });
   assert.deepEqual(result.exit, { code: 7, signal: null });
 });
