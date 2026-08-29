@@ -14,6 +14,7 @@ if (testFiles.length === 0) {
   console.error("No Velocity test files were found.");
   process.exitCode = 1;
 } else {
+  // velocity-ignore-next-line node/no-sync-process -- test harness intentionally waits for the isolated suite to finish
   const result = spawnSync(process.execPath, ["--test", ...process.argv.slice(2), ...testFiles], {
     cwd: projectRoot,
     env: process.env,
