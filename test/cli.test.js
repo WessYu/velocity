@@ -161,7 +161,7 @@ test("covers benchmark JSON/save/compare branches and boundary validation", asyn
   const baseline = path.join(directory, "baseline.json");
   const command = [process.execPath, "-e", "0"];
   const first = await run(["bench", "--runs", "1", "--warmup", "0", "--save", baseline, "--json", "--", ...command]);
-  assert.equal(first.code, 0, first.stderr); assert.equal(JSON.parse(first.stdout).kind, "benchmark");
+  assert.equal(first.code, 0, first.stderr); assert.equal(JSON.parse(first.stdout).schemaVersion, 1);
 
   const saved = JSON.parse(await readFile(baseline, "utf8"));
   saved.environment.nodeVersion = "different";
@@ -182,7 +182,7 @@ test("covers profile JSON/save/non-zero exit and config/rules/init validation", 
   assert.equal(profile.code, 3, profile.stderr); assert.equal(JSON.parse(profile.stdout).exit.code, 3); assert.equal(JSON.parse(await readFile(profileFile, "utf8")).exit.code, 3);
   assert.equal((await run(["profile"])).code, 2);
   assert.equal((await run(["profile", "node", "--", process.execPath, "-e", "0"])).code, 2);
-  assert.match((await run(["profile", "--help"])).stdout, /direct Node/);
+  assert.match((await run(["profile", "--help"])).stdout, /node-command/);
 
   const config = await run(["config", "--print", directory, "--format", "json"]);
   assert.equal(config.code, 0, config.stderr); assert.equal(JSON.parse(config.stdout).schemaVersion, 1);
