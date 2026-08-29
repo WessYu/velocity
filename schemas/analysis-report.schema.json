@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/analysis-report.schema.json",
+  "title": "Velocity analysis report v1",
+  "type": "object",
+  "required": ["schemaVersion", "target", "project", "generatedAt", "score", "scoreVersion", "summary", "issues", "config"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "const": 1 },
+    "score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "scoreVersion": { "const": 1 },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "severity", "file", "line", "column", "message", "suggestion", "fingerprint"],
+        "properties": {
+          "rule": { "type": "string" }, "severity": { "enum": ["info", "warning", "error"] }, "file": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1 }, "column": { "type": "integer", "minimum": 1 }, "message": { "type": "string" },
+          "suggestion": { "type": "string" }, "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{24}$" }
+        }
+      }
+    },
+    "target": { "type": "string" }, "project": { "type": "object" }, "generatedAt": { "type": "string", "format": "date-time" },
+    "summary": { "type": "object" }, "config": { "type": "object" }
+  }
+}

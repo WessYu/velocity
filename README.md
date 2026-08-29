@@ -1,155 +1,101 @@
 # Velocity
 
-<p align="center">
-  <img src="./assets/velocity-hero.svg" alt="Velocity terminal hero showing the command npx @wess2001/velocity analyze ." width="100%" />
-</p>
+Find performance risks, measure real behavior, and prevent regressions in JavaScript and TypeScript projects.
 
-**Find JavaScript performance risks, measure real Node.js runtime behavior, and stop regressions before they reach production.**
+Velocity is a local CLI and ESM API for three related jobs:
 
-Velocity combines three workflows that normally require separate tools:
+- parser-backed static analysis for likely performance risks;
+- reproducible command benchmarks with environment-aware comparisons;
+- direct Node.js process profiling for CPU, memory, and event-loop behavior.
 
-1. static diagnostics for JavaScript and TypeScript;
-2. repeatable command benchmarks with saved baselines;
-3. Node.js CPU, memory and event-loop profiling without application instrumentation.
+Its primary job is regression control: save versioned evidence, compare it in CI, and fail on new problems or measured regressions. Static findings and the health score are heuristic. Benchmark and profile values are measurements from the machine that ran them.
 
-It works with browser code, Node.js services, APIs, workers, scripts and libraries.
+## Quick start
 
-> Velocity is evidence-first: a static finding is described as a risk, while speedups are only reported after measurement.
-
-## Install
-
-Run directly with npm:
-
-```bash
-npx @wess2001/velocity analyze .
-```
-
-Or install it in a project:
+Requires Node.js 20, 22, or 24.
 
 ```bash
 npm install --save-dev @wess2001/velocity
-```
-
-Then use the local binary:
-
-```bash
 npx velocity analyze .
 ```
 
-## Static performance diagnostics
-
-```bash
-velocity analyze .
-```
-
-Velocity currently detects:
-
-- synchronous filesystem operations that block the Node.js event loop;
-- synchronous child processes;
-- independent async work that may be serialized inside loops;
-- DOM lookups repeated inside loops;
-- repeated collection traversals on potential hot paths;
-- intervals that cannot be cleaned up;
-- unusually large source files.
-
-Reports include the project stack, exact source location, severity, explanation, remediation and a score suitable for automation.
+Typical output:
 
 ```text
-Velocity performance report
-checkout-api · JavaScript · Fastify
-78/100 · 42 files · 5,901 lines
+Velocity performance risk report
+checkout-api · TypeScript · Fastify
+83/100 heuristic health score (formula v1) · 42 files · 5,901 lines
 
-src/catalog.js
-  ✖ 18: readFileSync blocks the Node.js event loop.
-    node/no-blocking-fs — Use the equivalent API from node:fs/promises and await it.
+src/catalog.ts
+  × 18:16 readFileSync blocks the Node.js event loop.
+    node/no-blocking-fs — Use the corresponding asynchronous API where blocking affects concurrency...
 ```
 
-Use JSON when another tool needs the report:
+Run a gate immediately:
 
 ```bash
-velocity analyze . --json
+npx velocity check . --min-score 85 --no-color
 ```
 
-### Reviewed suppressions
+## Regression gate in CI
 
-Suppress one reviewed case without disabling the rule globally:
-
-```js
-// velocity-ignore-next-line node/no-blocking-fs -- required during process exit
-fs.writeFileSync(reportPath, report);
-```
-
-## Prevent regressions in CI
-
-Create a baseline:
+Create and review a baseline:
 
 ```bash
-velocity analyze . --save .velocity/baseline.json
+npx velocity analyze . --format json --save .velocity/analysis.json
 ```
 
-Compare a later version:
+Compare subsequent changes:
 
 ```bash
-velocity compare .velocity/baseline.json . --max-score-drop 2
+npx velocity compare .velocity/analysis.json . --max-score-drop 2
 ```
 
-The command exits unsuccessfully when a new error appears or the permitted score drop is exceeded. Issue fingerprints do not include line numbers, so unrelated line movement is not treated as a regression.
+`compare` fails when a new error appears or the heuristic score drops beyond the budget. Fingerprints use rule, normalized file, semantic function context, normalized message, and occurrence—not line numbers—so unrelated line movement does not create a new finding.
 
-For a simple quality gate without a baseline:
+Minimal GitHub Actions step:
+
+```yaml
+- run: npm ci
+- run: npx velocity compare .velocity/analysis.json . --max-score-drop 2 --no-color
+```
+
+For GitHub Code Scanning:
 
 ```bash
-velocity check . --min-score 85
+npx velocity analyze . --format sarif --save velocity.sarif
 ```
 
-## Benchmark any command
+The SARIF 2.1.0 document includes rule metadata, severity, locations, help links, and stable partial fingerprints.
+
+## Static analysis
 
 ```bash
-velocity bench --runs 10 --warmup 2 -- npm run build
+velocity analyze [path] [--format human|json|sarif] [--save file]
+velocity check [path] [--min-score 70] [--format human|json|sarif]
+velocity rules [--format human|json]
 ```
 
-Velocity reports average, minimum, maximum, p50 and p95 wall-clock duration.
+Velocity parses `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts` with an isolated Babel parser adapter. Rules inspect the AST and lexical bindings. For example, `readFileSync()` is only reported when its binding comes from `fs` or `node:fs`; a user function with that name is not reported.
 
-Save a benchmark and detect a regression later:
+Built-in rule documentation is in [`docs/rules`](docs/rules/README.md). Every rule has a stable ID and can be set to `off`, `info`, `warning`, or `error`, including `project/large-source-file` and suppression-governance rules.
 
-```bash
-velocity bench --runs 10 --save .velocity/build.json -- npm run build
-velocity bench --runs 10 --compare .velocity/build.json --max-regression 8 -- npm run build
-```
+### Health score
 
-The second command fails when average duration regresses by more than 8%.
+The numeric score is a deterministic, versioned health indicator—not a scientific measure of application speed.
 
-## Profile a Node.js process
-
-```bash
-velocity profile -- node server.js
-```
-
-Without changing the target application, Velocity measures:
-
-- user and system CPU time;
-- current and peak RSS memory;
-- heap and external memory;
-- event-loop utilization;
-- mean, p95, p99 and maximum event-loop delay;
-- process duration and exit status.
-
-Save the complete profile as JSON:
-
-```bash
-velocity profile --save .velocity/profile.json -- node worker.js
-```
-
-The profiler is designed for direct Node.js commands. Package-manager commands can create several Node.js processes, so profile the underlying entry point when you need process-level accuracy.
+Formula v1 starts at 100 and subtracts 12 per error, 5 per warning, and 1 per informational finding, with a floor of zero. Objective regression gates should prefer new fingerprints, explicit severities, and measured benchmark changes over the score alone.
 
 ## Configuration
 
-Create `velocity.config.json`:
+Create a minimal file without overwriting an existing one:
 
 ```bash
-velocity init
+velocity init [directory]
+velocity config --print [path]
 ```
 
-Example:
+`velocity.config.json` is discovered from the target directory upward; the nearest file wins. Unknown properties, invalid values, and unknown rule IDs fail with the exact JSON property path.
 
 ```json
 {
@@ -158,13 +104,47 @@ Example:
   "failOn": "error",
   "rules": {
     "js/repeated-array-passes": "off",
-    "async/no-await-in-loop": "error"
+    "async/no-await-in-loop": "warning"
   },
-  "ignore": ["node_modules", ".git", "dist", "coverage", ".next"]
+  "ignore": ["node_modules", ".git", ".velocity", "dist", "build", "coverage", ".next", "**/*.min.js"]
 }
 ```
 
-Each rule can be turned off or assigned `info`, `warning` or `error` severity.
+Defaults are printed by `velocity config --print`. Ignore entries are glob-like path patterns; symlinks are not followed. Unreadable paths are preserved in versioned JSON diagnostics instead of aborting the complete scan. Generated directories are ignored by default.
+
+### Reviewed suppressions
+
+```js
+// velocity-ignore-next-line node/no-blocking-fs -- required during synchronous process shutdown
+fs.writeFileSync(reportPath, report);
+```
+
+Use `velocity-ignore-line` for a directive on the same line. A suppression must name an existing rule and contain a non-empty justification after `--`. Malformed directives are warnings; valid directives that suppress nothing are informational findings. Suppress narrowly only when the context has been measured or correctness requires the flagged behavior.
+
+## Benchmark
+
+```bash
+velocity bench --runs 10 --warmup 2 --save .velocity/build.json -- npm run build
+velocity bench --runs 10 --compare .velocity/build.json --max-regression 8 -- npm run build
+```
+
+The `--` boundary is absolute: every token after it belongs to the measured command. Commands run directly with `shell: false`.
+
+Each schema-v1 result records the full command, cwd, warmups, raw samples, mean, median, min, max, p50, p95, standard deviation, coefficient of variation, instability threshold, Node/OS/architecture/CPU, Velocity version, and timestamp. No outlier is discarded.
+
+Regression is `(current mean - baseline mean) / baseline mean × 100`. Commands must be identical. Environment differences are rejected unless `--allow-environment-mismatch` is explicit. A coefficient of variation over 15% marks a run unstable; unstable comparisons are shown but do not fail the regression budget because the evidence is not reliable enough.
+
+Command failures include up to 64 KiB of captured stdout/stderr for diagnosis.
+
+## Node.js profiler
+
+```bash
+velocity profile --save .velocity/profile.json -- node worker.js
+```
+
+The profiler accepts a direct `node` executable, preserves existing `NODE_OPTIONS`, supports paths with spaces, gives each process a collision-free report path, and reads only the main child report. It propagates the target exit status and cleans temporary files on success or failure.
+
+It records process duration, user/system CPU, final RSS, sampled peak RSS, final heap/external memory, event-loop utilization, and event-loop delay. Peak RSS is sampled every 25 ms and can miss extremely short peaks. Heap and external values are final values, not peaks. Exit hooks that never run (for example, forceful termination) cannot produce a report. Profiling injects a Node preload probe but does not instrument application functions.
 
 ## Programmatic API
 
@@ -174,55 +154,67 @@ import {
   benchmark,
   compareBenchmarks,
   compareReports,
-  profileNodeProcess
+  profileNodeProcess,
+  toSarif
 } from "@wess2001/velocity";
 
 const report = await analyzeProject(".");
-const timing = await benchmark("node", ["server.js"], { runs: 10 });
+const timing = await benchmark("node", ["server.js"], { runs: 10, warmup: 2 });
 const profile = await profileNodeProcess("node", ["worker.js"], { stdio: "ignore" });
 ```
 
-The package ships TypeScript declarations and has no third-party runtime dependencies.
+The package exposes only documented ESM entry points and ships synchronized TypeScript declarations. Public result objects carry `schemaVersion: 1`. Invalid options throw typed built-in errors; configuration errors use `ConfigError` with `propertyPath`.
 
-## Commands
+## Commands and exit codes
 
 | Command | Purpose |
 | --- | --- |
-| `velocity analyze [path]` | Find likely performance risks |
-| `velocity check [path]` | Enforce score and severity budgets |
-| `velocity compare <baseline> [path]` | Detect new static-analysis regressions |
-| `velocity bench -- <command>` | Measure repeatable wall-clock performance |
-| `velocity profile -- <node-command>` | Inspect CPU, memory and event-loop behavior |
-| `velocity init [path]` | Create a configuration file |
+| `analyze [path]` | Report static performance risks |
+| `check [path]` | Enforce severity and score budgets |
+| `compare <baseline> [path]` | Enforce new-finding budgets |
+| `bench -- <command>` | Measure and optionally compare a command |
+| `profile -- <node-command>` | Profile one direct Node.js process |
+| `config --print [path]` | Print resolved defaults and overrides |
+| `rules` | Inspect the rule catalog |
+| `init [path]` | Create config without overwrite |
 
-## Design principles
+- `0`: command completed and its gate passed;
+- `1`: a budget failed or the profiled target exited unsuccessfully;
+- `2`: invalid CLI usage, invalid configuration, incompatible baseline, or operational failure.
 
-- **Measure before promising.** Static suggestions are not presented as proven speedups.
-- **Safe by default.** Velocity never rewrites application code.
-- **Explain every finding.** Every issue includes cause, location and remediation.
-- **Low adoption cost.** The CLI has no third-party runtime dependencies.
-- **Regression-oriented.** Baselines turn isolated measurements into enforceable budgets.
+stdout contains the requested result. Errors and diagnostics use stderr. JSON and SARIF never contain ANSI color codes. Use `--no-color` for deterministic human logs.
 
-## Development
+## Compatibility and limitations
 
-Requires Node.js 20 or newer.
+- Supported runtimes: maintained Node.js 20, 22, and 24 lines on Linux, Windows, and macOS.
+- The parser handles standard Babel-supported JS/TS syntax; invalid or unsupported syntax becomes an explicit parse diagnostic.
+- Static rules identify risk patterns, not proven slowdowns. They do not perform whole-program data flow or runtime hot-path detection.
+- `async/no-await-in-loop` is contextual. Sequential iteration may be correct for ordering, rate limits, dependencies, or bounded memory; Velocity never recommends unbounded `Promise.all()` as a universal fix.
+- Benchmark results depend on machine load, power state, caches, and environment. Use controlled runners and enough samples.
+- The profiler covers the main Node process. Child processes write isolated data but are not aggregated.
+- Velocity has no telemetry, network service, automatic rewrites, plugin API, or hidden uploads.
+
+## Development and release readiness
 
 ```bash
-npm install
+npm ci
+npm run lint
+npm run typecheck
+npm run test:coverage
 npm run check
-npm run demo
+npm pack --dry-run
 ```
 
-CI validates Node.js 20, 22 and 24.
+CI runs tests on Node 20/22/24 and all three major operating systems, self-analysis, coverage gates, and tarball installation. npm provenance metadata is prepared, but releases require a maintainer-controlled Trusted Publishing workflow and are never performed by the test pipeline.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 
-- parser-backed rules with more precise control-flow analysis;
-- HTTP latency and throughput scenarios;
-- profile and benchmark history reports;
-- framework adapters for Express, Fastify, React and Next.js;
-- plugin API for internal and community rules;
-- safe codemods with patch previews and rollback.
+1. Improve binding and control-flow precision from fixture-backed false-positive reports.
+2. Version documented baseline migration tooling before any schema v2 change.
+3. Add statistically stronger repeated-run comparison only after cross-platform validation.
+4. Consider a public rule API only after the internal rule contract remains stable across releases.
 
 ## License
 

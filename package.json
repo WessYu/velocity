@@ -1,7 +1,7 @@
 {
-  "name": "@wessyu/velocity",
-  "version": "0.1.0",
-  "description": "Performance diagnostics and benchmarks for JavaScript and TypeScript projects.",
+  "name": "@wess2001/velocity",
+  "version": "0.2.0",
+  "description": "Find performance risks, measure real behavior, and prevent regressions in JavaScript and TypeScript projects.",
   "type": "module",
   "bin": {
     "velocity": "./bin/velocity.js"
@@ -16,14 +16,20 @@
   "files": [
     "bin",
     "src",
-    "scripts",
+    "docs",
+    "schemas",
     "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test",
-    "lint": "node scripts/check-syntax.js",
-    "check": "npm run lint && npm test && node bin/velocity.js check . --no-color",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=70",
+    "lint": "eslint bin src test examples eslint.config.js",
+    "typecheck": "tsc --noEmit --allowJs --checkJs --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.js src/index.d.ts",
+    "check": "npm run lint && npm run typecheck && npm run test:coverage && node bin/velocity.js check . --no-color",
     "demo": "node bin/velocity.js analyze examples/problematic-api --no-color",
     "prepublishOnly": "npm run check"
   },
@@ -41,7 +47,8 @@
   "license": "MIT",
   "author": "WessYu",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "repository": {
     "type": "git",
@@ -50,5 +57,14 @@
   "homepage": "https://github.com/WessYu/velocity#readme",
   "bugs": {
     "url": "https://github.com/WessYu/velocity/issues"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.28.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^24.3.0",
+    "eslint": "^10.0.0",
+    "typescript": "^5.9.2"
   }
 }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/velocity-config.schema.json",
+  "title": "Velocity configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "minScore": { "type": "number", "minimum": 0, "maximum": 100, "default": 70 },
+    "maxFileSizeKb": { "type": "number", "exclusiveMinimum": 0, "default": 250 },
+    "failOn": { "enum": ["off", "info", "warning", "error"], "default": "error" },
+    "ignore": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "node/no-blocking-fs": { "$ref": "#/$defs/ruleSetting" },
+        "node/no-sync-process": { "$ref": "#/$defs/ruleSetting" },
+        "async/no-await-in-loop": { "$ref": "#/$defs/ruleSetting" },
+        "browser/no-dom-query-in-loop": { "$ref": "#/$defs/ruleSetting" },
+        "js/repeated-array-passes": { "$ref": "#/$defs/ruleSetting" },
+        "runtime/track-interval": { "$ref": "#/$defs/ruleSetting" },
+        "project/large-source-file": { "$ref": "#/$defs/ruleSetting" },
+        "velocity/invalid-suppression": { "$ref": "#/$defs/ruleSetting" },
+        "velocity/unused-suppression": { "$ref": "#/$defs/ruleSetting" }
+      }
+    }
+  },
+  "$defs": { "ruleSetting": { "enum": ["off", "info", "warning", "error"] } }
+}

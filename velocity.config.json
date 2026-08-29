@@ -6,11 +6,13 @@
   "ignore": [
     "node_modules",
     ".git",
+    ".velocity",
     "dist",
     "build",
     "coverage",
     ".next",
     "examples",
+    "test",
     "deliverables"
   ]
 }

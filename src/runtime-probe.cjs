@@ -1,7 +1,8 @@
 const fs = require("node:fs");
 const { monitorEventLoopDelay, performance } = require("node:perf_hooks");
 
-const outputPath = process.env.VELOCITY_PROFILE_OUTPUT;
+const outputPrefix = process.env.VELOCITY_PROFILE_PREFIX;
+const outputPath = outputPrefix ? `${outputPrefix}-${process.pid}.json` : null;
 
 if (outputPath) {
   const histogram = monitorEventLoopDelay({ resolution: 10 });
@@ -16,7 +17,10 @@ if (outputPath) {
   }, 25);
   sampler.unref();
 
-  process.once("exit", () => {
+  let finalized = false;
+  function finalize() {
+    if (finalized) return;
+    finalized = true;
     clearInterval(sampler);
     histogram.disable();
     const memory = process.memoryUsage();
@@ -57,5 +61,15 @@ if (outputPath) {
     } catch {
       // Profiling must never change the target process exit behavior.
     }
-  });
+  }
+
+  process.once("exit", finalize);
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    if (process.listenerCount(signal) > 0) continue;
+    process.once(signal, () => {
+      if (process.listenerCount(signal) > 0) return;
+      finalize();
+      process.kill(process.pid, signal);
+    });
+  }
 }

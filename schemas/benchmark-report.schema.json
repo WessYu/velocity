@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/benchmark-report.schema.json",
+  "title": "Velocity benchmark report v1",
+  "type": "object",
+  "required": ["schemaVersion", "velocityVersion", "command", "cwd", "warmup", "runs", "samplesMs", "averageMs", "medianMs", "minMs", "maxMs", "p50Ms", "p95Ms", "standardDeviationMs", "coefficientOfVariation", "unstable", "environment", "timestamp"],
+  "properties": {
+    "schemaVersion": { "const": 1 }, "velocityVersion": { "type": "string" }, "command": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "cwd": { "type": "string" }, "warmup": { "type": "integer", "minimum": 0 }, "runs": { "type": "integer", "minimum": 1 },
+    "samplesMs": { "type": "array", "minItems": 1, "items": { "type": "number", "minimum": 0 } },
+    "averageMs": { "type": "number" }, "medianMs": { "type": "number" }, "minMs": { "type": "number" }, "maxMs": { "type": "number" },
+    "p50Ms": { "type": "number" }, "p95Ms": { "type": "number" }, "standardDeviationMs": { "type": "number" },
+    "coefficientOfVariation": { "type": "number" }, "unstable": { "type": "boolean" }, "environment": { "type": "object" }, "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

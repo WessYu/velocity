@@ -9,16 +9,57 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  compatibility:
+    name: Node ${{ matrix.node }} · ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20, 22, 24]
-
+        include:
+          - { os: ubuntu-latest, node: 20 }
+          - { os: ubuntu-latest, node: 22 }
+          - { os: ubuntu-latest, node: 24 }
+          - { os: windows-latest, node: 22 }
+          - { os: macos-latest, node: 22 }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: ${{ matrix.node }}
+          cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm run check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+  quality-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci --ignore-scripts
+      - run: npm run test:coverage
+      - run: node bin/velocity.js check . --no-color
+      - run: node bin/velocity.js analyze . --format sarif --save velocity.sarif
+      - name: Pack and smoke-test the published surface
+        shell: bash
+        run: |
+          package_file=$(npm pack --silent)
+          package_path="$PWD/$package_file"
+          temp_dir=$(mktemp -d)
+          cd "$temp_dir"
+          npm init -y >/dev/null
+          npm install --ignore-scripts "$package_path"
+          test "$(npx velocity --version)" = "0.2.0"
+          printf 'export const value = 1;\n' > index.js
+          npx velocity analyze . --format json > report.json
+          node -e 'const report = require("./report.json"); if (report.schemaVersion !== 1) process.exit(1)'
+          printf 'import { getRuleCatalog } from "@wess2001/velocity"; if (!getRuleCatalog().length) process.exit(1);\n' > consumer.mjs
+          node consumer.mjs
+          npm install --save-dev typescript @types/node
+          printf 'import { analyzeProject } from "@wess2001/velocity"; void analyzeProject(".");\n' > consumer.ts
+          npx tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 consumer.ts

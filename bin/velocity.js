@@ -4,5 +4,5 @@ import { run } from "../src/cli.js";
 
 run(process.argv.slice(2)).catch((error) => {
   console.error(`velocity: ${error.message}`);
-  process.exitCode = 1;
+  process.exitCode = error.exitCode ?? 2;
 });
