@@ -264,11 +264,12 @@ The manual release workflow:
 
 1. runs only from `main`;
 2. requires an entered version that exactly matches `package.json`;
-3. refuses to republish an existing npm version;
-4. installs an npm CLI with Trusted Publishing support;
-5. runs the complete release checks and `npm pack --dry-run`;
-6. publishes the public package with npm provenance;
-7. creates `v<version>` as a GitHub Release using the matching changelog section.
+3. detects an existing npm version and only treats it as recoverable when its `gitHead` matches the current release commit;
+4. serializes releases so two publish jobs cannot run concurrently;
+5. installs an npm CLI with Trusted Publishing support;
+6. runs the complete release checks and `npm pack --dry-run`;
+7. publishes the public package with npm provenance when that exact commit is not already published;
+8. creates the `v<version>` GitHub Release from the matching changelog section, or repairs that step after a partial release failure.
 
 For the one-time npm configuration, set the trusted publisher for `@wess2001/velocity` to:
 
@@ -278,7 +279,16 @@ For the one-time npm configuration, set the trusted publisher for `@wess2001/vel
 - workflow filename: `publish.yml`;
 - allowed action: `npm publish`.
 
-After that configuration exists on npm, releases can be started manually from the **Publish npm release** workflow in GitHub Actions. No `NPM_TOKEN` is required for publishing.
+With npm CLI 11.5.1 or newer, the equivalent authenticated CLI setup is:
+
+```bash
+npm trust github @wess2001/velocity \
+  --repo WessYu/velocity \
+  --file publish.yml \
+  --allow-publish
+```
+
+After that trusted-publisher relationship exists on npm, releases can be started manually from the **Publish npm release** workflow in GitHub Actions. No `NPM_TOKEN` is required for publishing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
