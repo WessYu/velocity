@@ -35,7 +35,11 @@ export async function profileNodeProcess(command, args = [], options = {}) {
     let result;
     try { result = JSON.parse(await readFile(outputPath, "utf8")); }
     catch { throw new Error("The main target process did not produce profile data. It may have failed before Node.js initialized the profiler."); }
-    return { schemaVersion: 1, velocityVersion: packageVersion, command: [command, ...args], cwd: path.resolve(options.cwd ?? process.cwd()), exit, ...result };
+    const { terminationSignal, ...profile } = result;
+    const normalizedExit = ["SIGINT", "SIGTERM"].includes(terminationSignal)
+      ? { code: null, signal: terminationSignal }
+      : exit;
+    return { schemaVersion: 1, velocityVersion: packageVersion, command: [command, ...args], cwd: path.resolve(options.cwd ?? process.cwd()), ...profile, exit: normalizedExit };
   } finally {
     process.removeListener("SIGINT", forwardSigint); process.removeListener("SIGTERM", forwardSigterm);
     await rm(tempDirectory, { recursive: true, force: true });

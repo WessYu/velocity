@@ -1,6 +1,6 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const { monitorEventLoopDelay, performance } = require("node:perf_hooks");
-const { setImmediate } = require("node:timers");
 
 const outputPrefix = process.env.VELOCITY_PROFILE_PREFIX;
 const outputPath = outputPrefix ? `${outputPrefix}-${process.pid}.json` : null;
@@ -19,7 +19,7 @@ if (outputPath) {
   sampler.unref();
 
   let finalized = false;
-  function finalize() {
+  function finalize(terminationSignal = null) {
     if (finalized) return;
     finalized = true;
     clearInterval(sampler);
@@ -34,6 +34,7 @@ if (outputPath) {
       pid: process.pid,
       nodeVersion: process.version,
       durationMs: performance.now() - startedAt,
+      terminationSignal,
       cpu: {
         userMs: cpu.user / 1e3,
         systemMs: cpu.system / 1e3
@@ -64,13 +65,13 @@ if (outputPath) {
     }
   }
 
-  process.once("exit", finalize);
+  process.once("exit", () => finalize());
   for (const signal of ["SIGINT", "SIGTERM"]) {
     if (process.listenerCount(signal) > 0) continue;
     const preserveSignalExit = () => {
-      finalize();
-      process.removeListener(signal, preserveSignalExit);
-      setImmediate(() => process.kill(process.pid, signal));
+      finalize(signal);
+      const signalNumber = os.constants.signals[signal];
+      process.exit(128 + signalNumber);
     };
     process.once(signal, preserveSignalExit);
   }
