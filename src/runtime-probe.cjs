@@ -69,7 +69,7 @@ if (outputPath) {
     const preserveSignalExit = () => {
       finalize();
       process.removeListener(signal, preserveSignalExit);
-      process.kill(process.pid, signal);
+      setImmediate(() => process.kill(process.pid, signal));
     };
     process.once(signal, preserveSignalExit);
   }

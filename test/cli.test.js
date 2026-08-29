@@ -28,7 +28,7 @@ test("runs build save/compare and bundle budgets through the CLI", async () => {
   const fixture = path.resolve("test/fixtures/vite-app");
   const directory = await mkdtemp(path.join(tmpdir(), "velocity-build-cli-"));
   const baseline = path.join(directory, "baseline.json");
-  const first = await run(["build", fixture, "--no-build", "--save", baseline, "--json"]);
+  const first = await run(["build", fixture, "--save", baseline, "--json"]);
   assert.equal(first.code, 0, first.stderr);
   assert.equal(JSON.parse(first.stdout).kind, "build");
   const compared = await run(["build", fixture, "--no-build", "--compare", baseline, "--json"]);
