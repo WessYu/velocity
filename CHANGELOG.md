@@ -11,9 +11,18 @@
 - Scoped snapshots, build/typecheck/test validation, precise rollback, measured-fix noise margins, and `verify` result classification.
 - Complete React + Vite and Next.js fixtures and packaged-tarball integration coverage.
 
+### Changed
+
+- Test discovery now runs only Velocity's top-level test files, so generated fixture bundles cannot be executed accidentally by Node's test runner.
+- Package smoke tests derive the expected CLI version from `package.json` instead of duplicating a release number in CI.
+- Generated Vite and Next.js fixture outputs are no longer tracked and every CLI build test creates the artifacts it needs.
+- Native image optimization auto-applies only evidence-backed intrinsic dimensions. Missing lazy-loading policy is reported for review; JSX source order alone is never treated as proof that an image is below the initial viewport.
+- Node profiling records signal termination without replacing application-owned `SIGINT` or `SIGTERM` handlers.
+
 ### Safety
 
 - Optimization never uses destructive Git commands and never overwrites unrelated user changes.
+- Lazy-loading is not auto-applied from source order because an incorrect `loading="lazy"` decision can delay an initially visible or LCP image.
 - TBT remains explicitly identified as a lab metric and is never labeled as INP.
 
 ## 0.2.0 - Unreleased
