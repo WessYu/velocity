@@ -2,24 +2,30 @@
 
 Find performance risks, measure real behavior, and prevent regressions in JavaScript and TypeScript projects.
 
-Velocity is a local CLI and ESM API for three related jobs:
+Velocity is a local CLI and ESM API that combines six parts of a performance workflow:
 
 - parser-backed static analysis for likely performance risks;
-- real React, Vite, and Next.js bundle measurement with raw, gzip, and Brotli sizes;
+- React, Vite, and Next.js bundle measurement with raw, gzip, and Brotli sizes;
 - Chromium load measurement for FCP, LCP, CLS, TBT, Speed Index, TTFB, requests, and bytes;
 - reviewable, explicitly authorized optimizations with scoped snapshots and rollback;
 - reproducible command benchmarks with environment-aware comparisons;
 - direct Node.js process profiling for CPU, memory, and event-loop behavior.
 
-Its primary job is regression control: save versioned evidence, compare it in CI, and fail on new problems or measured regressions. Static findings and the health score are heuristic. Benchmark and profile values are measurements from the machine that ran them.
+Its primary job is regression control: save versioned evidence, compare it in CI, and fail on new problems or measured regressions. Static findings and the health score are heuristic. Benchmark, build, load, and profile values are measurements from the environment that produced them.
 
 ## Quick start
 
-Requires Node.js 20, 22, or 24.
+Requires Node.js 20 or newer. CI verifies Node.js 20, 22, and 24 across Linux, Windows, and macOS.
 
 ```bash
 npm install --save-dev @wess2001/velocity
 npx velocity analyze .
+```
+
+Run a gate immediately:
+
+```bash
+npx velocity check . --min-score 85 --no-color
 ```
 
 ## Build, load, optimize, and verify
@@ -32,7 +38,7 @@ velocity build . --save .velocity/build-before.json \
 velocity build . --compare .velocity/build-before.json --max-regression 2
 ```
 
-Velocity detects Vite, React, and Next.js, runs the declared build unless `--no-build` is set, reads framework manifests, identifies initial and route chunks, and measures every emitted JavaScript, CSS, image, font, and other asset in raw, gzip, and Brotli bytes. Next.js `public/` assets are included.
+Velocity detects Vite, React, and Next.js, runs the declared build unless `--no-build` is set, reads framework manifests, identifies initial and route chunks, and measures emitted JavaScript, CSS, images, fonts, and other assets in raw, gzip, and Brotli bytes. Next.js `public/` assets are included.
 
 Measure an actual URL in Chromium:
 
@@ -53,11 +59,11 @@ velocity optimize . --apply --fix size-image-0123456789ab
 velocity verify .
 ```
 
-Every proposed change includes its classification (`safe-fix`, `measured-fix`, `review-required`, or `recommendation`), evidence, expected impact, risk, affected files, and unified diff. `--apply` requires each optimization ID explicitly. Velocity snapshots only affected files, checks that patch context has not changed, and runs build, typecheck, and tests. It never invokes `git reset`. On failure it restores only files changed by the current Velocity run. A `measured-fix` is also restored when the before/after build does not prove improvement above the configured noise margin.
+Every proposed change includes its classification (`safe-fix`, `measured-fix`, `review-required`, or `recommendation`), evidence, expected impact, risk, affected files, and unified diff. `--apply` requires each optimization ID explicitly. Velocity snapshots only affected files, checks that patch context has not changed, and runs build, typecheck, and tests. It never invokes destructive Git reset operations. On failure it restores only files changed by the current Velocity run. A `measured-fix` is also restored when the before/after evidence does not prove improvement above the configured noise margin.
 
 `verify --before report.json --after report.json` compares saved build or load reports and returns `improved`, `unchanged`, `inconclusive`, `regressed`, or `failed`.
 
-Typical output:
+Typical static-analysis output:
 
 ```text
 Velocity performance risk report
@@ -67,12 +73,6 @@ checkout-api · TypeScript · Fastify
 src/catalog.ts
   × 18:16 readFileSync blocks the Node.js event loop.
     node/no-blocking-fs — Use the corresponding asynchronous API where blocking affects concurrency...
-```
-
-Run a gate immediately:
-
-```bash
-npx velocity check . --min-score 85 --no-color
 ```
 
 ## Regression gate in CI
@@ -122,7 +122,7 @@ Built-in rule documentation is in [`docs/rules`](docs/rules/README.md). Every ru
 
 The numeric score is a deterministic, versioned health indicator—not a scientific measure of application speed.
 
-Formula v1 starts at 100 and subtracts 12 per error, 5 per warning, and 1 per informational finding, with a floor of zero. Objective regression gates should prefer new fingerprints, explicit severities, and measured benchmark changes over the score alone.
+Formula v1 starts at 100 and subtracts 12 per error, 5 per warning, and 1 per informational finding, with a floor of zero. Objective regression gates should prefer new fingerprints, explicit severities, and measured changes over the score alone.
 
 ## Configuration
 
@@ -180,9 +180,9 @@ Command failures include up to 64 KiB of captured stdout/stderr for diagnosis.
 velocity profile --save .velocity/profile.json -- node worker.js
 ```
 
-The profiler accepts a direct `node` executable, preserves existing `NODE_OPTIONS`, supports paths with spaces, gives each process a collision-free report path, and reads only the main child report. It propagates the target exit status and cleans temporary files on success or failure.
+The profiler accepts a direct `node` executable, preserves existing `NODE_OPTIONS`, supports paths with spaces, gives each process a collision-free report path, and reads only the main child report. It preserves target exit behavior and cleans temporary files on success or failure.
 
-It records process duration, user/system CPU, final RSS, sampled peak RSS, final heap/external memory, event-loop utilization, and event-loop delay. Peak RSS is sampled every 25 ms and can miss extremely short peaks. Heap and external values are final values, not peaks. Exit hooks that never run (for example, forceful termination) cannot produce a report. Profiling injects a Node preload probe but does not instrument application functions.
+It records process duration, user/system CPU, final RSS, sampled peak RSS, final heap/external memory, event-loop utilization, and event-loop delay. Peak RSS is sampled every 25 ms and can miss extremely short peaks. Heap and external values are final values, not peaks. Exit hooks that never run—for example under forceful termination—cannot produce a report. Profiling injects a Node preload probe but does not instrument application functions or replace application-owned signal handling.
 
 ## Programmatic API
 
@@ -208,7 +208,7 @@ const timing = await benchmark("node", ["server.js"], { runs: 10, warmup: 2 });
 const profile = await profileNodeProcess("node", ["worker.js"], { stdio: "ignore" });
 ```
 
-The package exposes only documented ESM entry points and ships synchronized TypeScript declarations. Public result objects carry `schemaVersion: 1`. Invalid options throw typed built-in errors; configuration errors use `ConfigError` with `propertyPath`.
+The package exposes documented ESM entry points and ships synchronized TypeScript declarations. Public result objects carry `schemaVersion: 1`. Configuration errors use `ConfigError` with `propertyPath`.
 
 ## Commands and exit codes
 
@@ -235,7 +235,7 @@ stdout contains the requested result. Errors and diagnostics use stderr. JSON an
 
 ## Compatibility and limitations
 
-- Supported runtimes: maintained Node.js 20, 22, and 24 lines on Linux, Windows, and macOS.
+- Runtime requirement: Node.js `>=20`; CI verifies Node.js 20, 22, and 24 on Linux plus Node.js 22 on Windows and macOS.
 - The parser handles standard Babel-supported JS/TS syntax; invalid or unsupported syntax becomes an explicit parse diagnostic.
 - Static rules identify risk patterns, not proven slowdowns. They do not perform whole-program data flow or runtime hot-path detection.
 - `async/no-await-in-loop` is contextual. Sequential iteration may be correct for ordering, rate limits, dependencies, or bounded memory; Velocity never recommends unbounded `Promise.all()` as a universal fix.
@@ -243,7 +243,7 @@ stdout contains the requested result. Errors and diagnostics use stderr. JSON an
 - The profiler covers the main Node process. Child processes write isolated data but are not aggregated.
 - Velocity has no telemetry, hosted service, plugin API, or hidden uploads. Its only source rewrites are explicit `optimize --apply --fix <id>` selections with scoped snapshots.
 
-## Development and release readiness
+## Development
 
 ```bash
 npm ci
@@ -254,7 +254,31 @@ npm run check
 npm pack --dry-run
 ```
 
-CI runs tests on Node 20/22/24 and all three major operating systems, self-analysis, coverage gates, and tarball installation. npm provenance metadata is prepared, but releases require a maintainer-controlled Trusted Publishing workflow and are never performed by the test pipeline.
+CI runs tests on Node.js 20/22/24 and all three major operating systems, self-analysis, coverage gates, SARIF generation, and tarball installation. The test pipeline never publishes a package.
+
+## Release process
+
+Publishing is intentionally isolated in `.github/workflows/publish.yml` and uses npm Trusted Publishing rather than a long-lived write token.
+
+The manual release workflow:
+
+1. runs only from `main`;
+2. requires an entered version that exactly matches `package.json`;
+3. refuses to republish an existing npm version;
+4. installs an npm CLI with Trusted Publishing support;
+5. runs the complete release checks and `npm pack --dry-run`;
+6. publishes the public package with npm provenance;
+7. creates `v<version>` as a GitHub Release using the matching changelog section.
+
+For the one-time npm configuration, set the trusted publisher for `@wess2001/velocity` to:
+
+- provider: GitHub Actions;
+- organization/user: `WessYu`;
+- repository: `velocity`;
+- workflow filename: `publish.yml`;
+- allowed action: `npm publish`.
+
+After that configuration exists on npm, releases can be started manually from the **Publish npm release** workflow in GitHub Actions. No `NPM_TOKEN` is required for publishing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
