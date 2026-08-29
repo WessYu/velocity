@@ -93,3 +93,108 @@ test("init writes valid minimal config and refuses overwrite", async () => {
   const config = JSON.parse(await readFile(path.join(directory, "velocity.config.json"), "utf8")); assert.equal(config.failOn, "error");
   const second = await run(["init", directory]); assert.equal(second.code, 2); assert.match(second.stderr, /EEXIST/);
 });
+
+test("covers global aliases, option parser edge cases and command validation", async () => {
+  assert.match((await run([])).stdout, /Velocity/);
+  assert.match((await run(["-h"])).stdout, /Usage:/);
+  assert.match((await run(["-v"])).stdout, /^0\.3\.0/m);
+
+  const versionArgs = await run(["--version", "extra"]);
+  assert.equal(versionArgs.code, 2); assert.match(versionArgs.stderr, /does not accept arguments/);
+  const unknownCommand = await run(["definitely-unknown"]);
+  assert.equal(unknownCommand.code, 2); assert.match(unknownCommand.stderr, /Unknown command/);
+  const booleanValue = await run(["rules", "--json=true"]);
+  assert.equal(booleanValue.code, 2); assert.match(booleanValue.stderr, /does not accept a value/);
+  const missingValue = await run(["analyze", "--format", "--json"]);
+  assert.equal(missingValue.code, 2); assert.match(missingValue.stderr, /requires a value/);
+  const invalidFormat = await run(["rules", "--format=xml"]);
+  assert.equal(invalidFormat.code, 2); assert.match(invalidFormat.stderr, /must be one of/);
+  const tooMany = await run(["analyze", ".", "."]);
+  assert.equal(tooMany.code, 2); assert.match(tooMany.stderr, /at most one path/);
+  const invalidScore = await run(["analyze", "--min-score", "101"]);
+  assert.equal(invalidScore.code, 2); assert.match(invalidScore.stderr, /between 0 and 100/);
+});
+
+test("covers analyze human/save, clean check and static comparison gating", async () => {
+  const clean = await project();
+  const risky = await project('import fs from "node:fs"; fs.statSync(".");');
+  const directory = await mkdtemp(path.join(tmpdir(), "velocity-analysis-cli-"));
+  const baseline = path.join(directory, "baseline.json");
+
+  const human = await run(["analyze", clean, "--save", baseline, "--no-color"]);
+  assert.equal(human.code, 0, human.stderr); assert.match(human.stdout, /Velocity performance risk report/);
+  assert.equal(JSON.parse(await readFile(baseline, "utf8")).schemaVersion, 1);
+  const check = await run(["check", clean, "--format", "json"]);
+  assert.equal(check.code, 0, check.stderr);
+
+  const same = await run(["compare", baseline, clean]);
+  assert.equal(same.code, 0, same.stderr); assert.match(same.stdout, /Velocity analysis comparison/);
+  const gated = await run(["compare", baseline, risky, "--json", "--max-score-drop", "0"]);
+  assert.equal(gated.code, 1, gated.stderr); assert.equal(JSON.parse(gated.stdout).kind, "analysis-comparison");
+  assert.match((await run(["compare", "--help"])).stdout, /baseline\.json/);
+  assert.equal((await run(["compare"])).code, 2);
+});
+
+test("covers optimize and verify validation plus human verification outcomes", async () => {
+  const fixture = path.resolve("test/fixtures/vite-app");
+  const mutuallyExclusive = await run(["optimize", fixture, "--apply", "--dry-run"]);
+  assert.equal(mutuallyExclusive.code, 2); assert.match(mutuallyExclusive.stderr, /mutually exclusive/);
+  const fixWithoutApply = await run(["optimize", fixture, "--fix", "one"]);
+  assert.equal(fixWithoutApply.code, 2); assert.match(fixWithoutApply.stderr, /only valid with --apply/);
+  const tooMany = await run(["optimize", fixture, fixture]);
+  assert.equal(tooMany.code, 2);
+  const humanPlan = await run(["optimize", fixture]);
+  assert.equal(humanPlan.code, 0, humanPlan.stderr); assert.match(humanPlan.stdout, /Velocity optimization dry-run/);
+
+  const directory = await mkdtemp(path.join(tmpdir(), "velocity-verify-branches-"));
+  const report = (bytes) => ({ schemaVersion: 1, kind: "build", adapter: { adapter: "vite" }, summary: { initialJavaScript: { rawBytes: bytes, brotliBytes: bytes }, javascript: { rawBytes: bytes }, css: { rawBytes: 0 }, total: { rawBytes: bytes } }, budgetViolations: [] });
+  const before = path.join(directory, "before.json"); const after = path.join(directory, "after.json");
+  await writeFile(before, JSON.stringify(report(100))); await writeFile(after, JSON.stringify(report(150)));
+  const regressed = await run(["verify", fixture, "--before", before, "--after", after, "--margin", "0"]);
+  assert.equal(regressed.code, 1, regressed.stderr); assert.match(regressed.stdout, /Velocity verification - regressed/);
+  const tooManyVerify = await run(["verify", fixture, fixture]);
+  assert.equal(tooManyVerify.code, 2);
+});
+
+test("covers benchmark JSON/save/compare branches and boundary validation", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "velocity-bench-cli-"));
+  const baseline = path.join(directory, "baseline.json");
+  const command = [process.execPath, "-e", "0"];
+  const first = await run(["bench", "--runs", "1", "--warmup", "0", "--save", baseline, "--json", "--", ...command]);
+  assert.equal(first.code, 0, first.stderr); assert.equal(JSON.parse(first.stdout).kind, "benchmark");
+
+  const saved = JSON.parse(await readFile(baseline, "utf8"));
+  saved.environment.nodeVersion = "different";
+  await writeFile(baseline, JSON.stringify(saved));
+  const compared = await run(["bench", "--runs", "1", "--warmup", "0", "--compare", baseline, "--allow-environment-mismatch", "--max-regression", "100000", "--json", "--", ...command]);
+  assert.equal(compared.code, 0, compared.stderr); assert.equal(JSON.parse(compared.stdout).kind, "benchmark-comparison");
+
+  const misplaced = await run(["bench", "node", "--", process.execPath, "-e", "0"]);
+  assert.equal(misplaced.code, 2); assert.match(misplaced.stderr, /must follow the -- boundary/);
+  const missing = await run(["bench", "--runs", "1"]);
+  assert.equal(missing.code, 2); assert.match(missing.stderr, /requires -- followed by a command/);
+});
+
+test("covers profile JSON/save/non-zero exit and config/rules/init validation", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "velocity-cli-misc-"));
+  const profileFile = path.join(directory, "profile.json");
+  const profile = await run(["profile", "--save", profileFile, "--json", "--", process.execPath, "-e", "process.exitCode=3"]);
+  assert.equal(profile.code, 3, profile.stderr); assert.equal(JSON.parse(profile.stdout).exit.code, 3); assert.equal(JSON.parse(await readFile(profileFile, "utf8")).exit.code, 3);
+  assert.equal((await run(["profile"])).code, 2);
+  assert.equal((await run(["profile", "node", "--", process.execPath, "-e", "0"])).code, 2);
+  assert.match((await run(["profile", "--help"])).stdout, /direct Node/);
+
+  const config = await run(["config", "--print", directory, "--format", "json"]);
+  assert.equal(config.code, 0, config.stderr); assert.equal(JSON.parse(config.stdout).schemaVersion, 1);
+  assert.equal((await run(["config"])).code, 2);
+  assert.equal((await run(["config", "--print", "--format", "human"])).code, 2);
+  assert.equal((await run(["config", "--print", directory, directory])).code, 2);
+  assert.match((await run(["config", "--help"])).stdout, /config --print/);
+
+  const rulesHuman = await run(["rules"]); assert.equal(rulesHuman.code, 0); assert.match(rulesHuman.stdout, /async\/no-await-in-loop/);
+  const rulesJson = await run(["rules", "--json"]); assert.equal(rulesJson.code, 0); assert.ok(JSON.parse(rulesJson.stdout).rules.length > 0);
+  assert.equal((await run(["rules", "extra"])).code, 2);
+  assert.match((await run(["rules", "-h"])).stdout, /velocity rules/);
+  assert.equal((await run(["init", directory, directory])).code, 2);
+  assert.match((await run(["init", "--help"])).stdout, /velocity init/);
+});
