@@ -12,7 +12,8 @@ test("dry-run emits classified evidence, impact, risk, files, and reviewable pat
     assert.equal(plan.mode, "dry-run");
     assert.equal(plan.framework, "Vite");
     assert.ok(plan.optimizations.some((item) => item.classification === "safe-fix"));
-    assert.ok(plan.optimizations.some((item) => item.classification === "measured-fix"));
+    assert.equal(plan.optimizations.some((item) => item.id.startsWith("lazy-image-")), false);
+    assert.ok(plan.findings.some((item) => item.id === "image/review-loading-policy"));
     for (const item of plan.optimizations) {
       assert.ok(item.evidence && item.expectedImpact && item.risk);
       assert.ok(item.files.length && item.patch && item.diff.includes("Index:"));
@@ -39,17 +40,17 @@ test("apply changes only an authorized safe fix, validates the project, and crea
   } finally { await fixture.cleanup(); }
 });
 
-test("rolls back a measured fix when bundle gain is not above the noise margin", { timeout: 60_000 }, async () => {
+test("does not infer lazy-loading safety from JSX source order", async () => {
   const fixture = await temporaryFixture("vite-app");
   try {
     const sourceFile = path.join(fixture.directory, "src", "App.jsx");
     const original = await readFile(sourceFile, "utf8");
     const plan = await createOptimizationPlan(fixture.directory);
-    const fix = plan.optimizations.find((item) => item.classification === "measured-fix");
-    const run = await applyOptimizations(fixture.directory, { fixes: [fix.id], marginPercent: 2 });
-    assert.deepEqual(run.rolledBack, [fix.id]);
+    assert.equal(plan.optimizations.some((item) => item.diff?.includes('loading="lazy"')), false);
+    const finding = plan.findings.find((item) => item.id === "image/review-loading-policy");
+    assert.ok(finding);
+    assert.match(finding.recommendation, /real load measurement/);
     assert.equal(await readFile(sourceFile, "utf8"), original);
-    assert.notEqual(run.verification.classification, "improved");
   } finally { await fixture.cleanup(); }
 });
 

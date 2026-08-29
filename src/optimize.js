@@ -120,8 +120,9 @@ async function inspectSource(root, file, adapter, state) {
   return { findings, optimizations };
 }
 
-async function imageOptimizations(root, adapter, images) {
+async function imageOptimizations(root, images) {
   const optimizations = [];
+  const findings = [];
   for (let index = 0; index < images.length; index += 1) {
     const item = images[index];
     const src = stringAttribute(item.attributes.get("src"));
@@ -130,22 +131,31 @@ async function imageOptimizations(root, adapter, images) {
     const additions = [];
     if (dimensions && !item.attributes.has("width")) additions.push(` width={${dimensions.width}}`);
     if (dimensions && !item.attributes.has("height")) additions.push(` height={${dimensions.height}}`);
-    const belowFirst = index > 0;
-    if (belowFirst && !item.attributes.has("loading")) additions.push(' loading="lazy"');
-    if (!additions.length) continue;
-    const measured = belowFirst && additions.some((value) => value.includes("loading"));
-    optimizations.push(optimization({
-      root, file: item.file, source: item.source, node: item.node,
-      classification: measured ? "measured-fix" : "safe-fix",
-      action: measured ? "lazy-image" : "size-image",
-      title: measured ? "Lazy-load a non-leading image and reserve its layout" : "Reserve image layout dimensions",
-      evidence: dimensions ? `${src} is ${dimensions.width}×${dimensions.height}; JSX omits ${additions.map((value) => value.trim().split(/[={]/)[0]).join(", ")}` : `${src ?? "image"} is not the leading image and has no loading policy`,
-      impact: measured ? "May reduce initial transferred bytes; must prove a gain above noise." : "Prevents avoidable layout shift without changing the image resource.",
-      risk: measured ? "The image may appear later during fast scrolling; Velocity will roll back without measured bundle gain." : "Low; intrinsic dimensions preserve aspect ratio but CSS should still be reviewed.",
-      insertion: additions.join("")
-    }));
+    if (additions.length) {
+      optimizations.push(optimization({
+        root, file: item.file, source: item.source, node: item.node,
+        classification: "safe-fix",
+        action: "size-image",
+        title: "Reserve image layout dimensions",
+        evidence: `${src} is ${dimensions.width}×${dimensions.height}; JSX omits ${additions.map((value) => value.trim().split(/[={]/)[0]).join(", ")}`,
+        impact: "Prevents avoidable layout shift without changing the image resource or its loading priority.",
+        risk: "Low; intrinsic dimensions preserve aspect ratio but CSS should still be reviewed.",
+        insertion: additions.join("")
+      }));
+    }
+    if (index > 0 && !item.attributes.has("loading")) {
+      findings.push({
+        id: "image/review-loading-policy",
+        classification: "recommendation",
+        file: path.relative(root, item.file).replaceAll("\\", "/"),
+        line: item.node.loc?.start.line ?? null,
+        evidence: `${src ?? "Image"} has no explicit loading policy. Its source order is not evidence that it is below the initial viewport.`,
+        recommendation: "Confirm viewport position with a real load measurement before adding loading=\"lazy\". Velocity does not auto-apply lazy loading from JSX source order.",
+        measured: false
+      });
+    }
   }
-  return optimizations;
+  return { optimizations, findings };
 }
 
 export async function createOptimizationPlan(target = process.cwd(), options = {}) {
@@ -157,11 +167,13 @@ export async function createOptimizationPlan(target = process.cwd(), options = {
   const findings = [];
   const optimizations = [];
   for (const file of discovery.files) {
-    // velocity-ignore-next-line async/no-await-in-loop -- source order makes optimization IDs and image priority deterministic
+    // velocity-ignore-next-line async/no-await-in-loop -- source order makes optimization IDs deterministic
     const result = await inspectSource(root, file, adapter, state);
     findings.push(...result.findings); optimizations.push(...result.optimizations);
   }
-  optimizations.push(...await imageOptimizations(root, adapter, state.images));
+  const imageReview = await imageOptimizations(root, state.images);
+  optimizations.push(...imageReview.optimizations);
+  findings.push(...imageReview.findings);
   if (state.imports >= 8 && state.dynamicImports === 0) findings.push({ id: "adapter/no-dynamic-imports", classification: "recommendation", file: null, line: null, evidence: `${state.imports} static imports and no dynamic imports were found`, recommendation: "Review route or feature boundaries for lazy loading. No patch is generated because component lifecycle and loading UX are semantic decisions.", measured: false });
   let build;
   let buildError = null;
