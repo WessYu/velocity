@@ -12,6 +12,7 @@ const chromeCandidates = process.platform === "win32"
 
 async function findBrowser(explicit) {
   for (const candidate of [explicit, process.env.CHROME_PATH, ...chromeCandidates].filter(Boolean)) {
+    // velocity-ignore-next-line async/no-await-in-loop -- browser discovery preserves explicit and platform installation priority
     try { await access(candidate); return candidate; } catch { /* try the next installation */ }
   }
   throw new Error("No compatible Chrome or Edge executable was found. Set CHROME_PATH to a Chromium-based browser.");
@@ -90,6 +91,7 @@ async function measureRun(url, options, browserPath) {
   let capturing = true;
   const capture = (async () => {
     while (capturing && frames.length < 100) {
+      // velocity-ignore-next-line async/no-await-in-loop -- each filmstrip frame must complete before the next timestamped sample
       try { frames.push({ time: Date.now() - startedAt, buffer: await page.screenshot({ type: "png", animations: "disabled" }) }); } catch { /* navigation can replace the frame */ }
       // velocity-ignore-next-line async/no-await-in-loop -- filmstrip sampling must preserve time order
       await new Promise((resolve) => setTimeout(resolve, 200));

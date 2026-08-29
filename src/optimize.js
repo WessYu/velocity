@@ -127,6 +127,7 @@ async function imageOptimizations(root, images) {
     const item = images[index];
     const src = stringAttribute(item.attributes.get("src"));
     const imageFile = resolveImage(root, item.file, src);
+    // velocity-ignore-next-line async/no-await-in-loop -- image inspection stays ordered so optimization IDs and evidence remain deterministic
     const dimensions = imageFile ? await imageDimensions(imageFile) : null;
     const additions = [];
     if (dimensions && !item.attributes.has("width")) additions.push(` width={${dimensions.width}}`);
@@ -236,8 +237,8 @@ async function validateProject(root, adapter) {
   for (const name of ["typecheck", "test"]) {
     if (!adapter.manifest.scripts?.[name]) { steps.push({ name, status: "skipped", reason: `package.json has no ${name} script` }); continue; }
     const args = name === "test" ? ["test"] : ["run", name];
-    // velocity-ignore-next-line async/no-await-in-loop -- validation must stop at the first failing project command
     const npm = npmInvocation(args);
+    // velocity-ignore-next-line async/no-await-in-loop -- validation must stop at the first failing project command
     const execution = await runCommand(npm.command, npm.args, { cwd: root });
     steps.push({ name, status: execution.code === 0 ? "passed" : "failed", execution });
     if (execution.code !== 0) return { passed: false, steps, build };
