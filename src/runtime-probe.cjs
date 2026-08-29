@@ -1,5 +1,5 @@
 const fs = require("node:fs");
-const os = require("node:os");
+const { setImmediate } = require("node:timers");
 const { monitorEventLoopDelay, performance } = require("node:perf_hooks");
 
 const outputPrefix = process.env.VELOCITY_PROFILE_PREFIX;
@@ -67,12 +67,14 @@ if (outputPath) {
 
   process.once("exit", () => finalize());
   for (const signal of ["SIGINT", "SIGTERM"]) {
-    if (process.listenerCount(signal) > 0) continue;
     const preserveSignalExit = () => {
+      const otherListeners = process.listeners(signal).filter((listener) => listener !== preserveSignalExit);
+      if (otherListeners.length > 0) return;
+
       finalize(signal);
-      const signalNumber = os.constants.signals[signal];
-      process.exit(128 + signalNumber);
+      process.removeListener(signal, preserveSignalExit);
+      setImmediate(() => process.kill(process.pid, signal));
     };
-    process.once(signal, preserveSignalExit);
+    process.prependListener(signal, preserveSignalExit);
   }
 }

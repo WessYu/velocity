@@ -21,7 +21,14 @@ test("cleans up when Node fails before producing a report", async () => {
   await assert.rejects(() => profileNodeProcess(process.execPath, ["--definitely-invalid-node-option"], { stdio: "ignore" }), /did not produce profile data/);
 });
 
-test("records a target signal", { skip: process.platform === "win32" }, async () => {
-  const result = await profileNodeProcess(process.execPath, ["-e", "process.kill(process.pid, 'SIGTERM')"], { stdio: "ignore" });
-  assert.equal(result.exit.signal, "SIGTERM");
+test("records a target signal without racing natural process exit", { skip: process.platform === "win32" }, async () => {
+  const source = "setTimeout(() => process.kill(process.pid, 'SIGTERM'), 10); setTimeout(() => {}, 1000);";
+  const result = await profileNodeProcess(process.execPath, ["-e", source], { stdio: "ignore" });
+  assert.deepEqual(result.exit, { code: null, signal: "SIGTERM" });
+});
+
+test("does not override application-owned signal handling", { skip: process.platform === "win32" }, async () => {
+  const source = "process.once('SIGTERM', () => { process.exitCode = 7; }); setTimeout(() => process.kill(process.pid, 'SIGTERM'), 10); setTimeout(() => {}, 25);";
+  const result = await profileNodeProcess(process.execPath, ["-e", source], { stdio: "ignore" });
+  assert.deepEqual(result.exit, { code: 7, signal: null });
 });
