@@ -32,7 +32,7 @@ test("human report formatter covers scores, colors, grouping and discovery failu
     { file: "src/b.js", line: 3, column: 2, severity: "info", message: "note", rule: "z", suggestion: "inspect" }
   ];
   const warning = formatReport({ ...base, score: 70, issues }, { color: true });
-  assert.match(warning, /\u001b\[/);
+  assert.ok(warning.includes("\u001b["));
   assert.match(warning, /paths could not be read/);
   assert.match(formatReport({ ...base, score: 40, issues }, { color: false }), /40\/100/);
 });
