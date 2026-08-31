@@ -43,7 +43,12 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm ci --ignore-scripts
       - run: npm run test:coverage
+      - run: npm run validate:schemas
       - run: node bin/velocity.js check . --no-color
+      - name: Validate generated analysis JSON
+        run: |
+          node bin/velocity.js analyze . --format json --save analysis-report.json >/dev/null
+          node scripts/validate-schemas.js schemas/analysis-report.schema.json analysis-report.json
       - run: node bin/velocity.js analyze . --format sarif --save velocity.sarif
       - name: Pack and smoke-test the published surface
         shell: bash
@@ -64,3 +69,32 @@ jobs:
           npm install --save-dev typescript @types/node
           printf 'import { analyzeProject } from "@wess2001/velocity"; void analyzeProject(".");\n' > consumer.ts
           npx tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 consumer.ts
+
+  browser-and-schemas:
+    name: Chromium smoke · Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run validate:schemas
+      - name: Install the playwright-core Chromium revision
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Resolve the exact Chromium executable
+        shell: bash
+        run: echo "CHROME_PATH=$(node --input-type=module -e \"import { chromium } from 'playwright-core'; process.stdout.write(chromium.executablePath())\")" >> "$GITHUB_ENV"
+      - name: Generate a local self-signed certificate
+        shell: bash
+        run: |
+          mkdir -p .velocity-ci-tls
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout .velocity-ci-tls/key.pem -out .velocity-ci-tls/cert.pem -days 1 -subj "/CN=127.0.0.1" >/dev/null 2>&1
+      - name: Run mandatory real-browser HTTP and HTTPS smoke
+        env:
+          VELOCITY_TLS_KEY: .velocity-ci-tls/key.pem
+          VELOCITY_TLS_CERT: .velocity-ci-tls/cert.pem
+        run: node scripts/browser-smoke.js
+      - name: Validate the generated load report against its schema
+        run: node scripts/validate-schemas.js schemas/load-report.schema.json load-smoke.json
