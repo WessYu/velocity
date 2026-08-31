@@ -10,18 +10,18 @@
 
 **Performance gates for JavaScript and TypeScript projects — from source code to real runtime behavior.**
 
-Velocity is a local CLI and ESM API that helps teams find likely performance risks, measure builds and browser behavior, compare baselines, and fail CI when a regression exceeds an explicit budget.
+Velocity is a local CLI and ESM API that helps teams find likely performance risks, measure builds and browser behavior, compare compatible baselines, and fail CI when a regression exceeds an explicit budget.
 
 It combines six parts of one workflow:
 
 - **Analyze** source code with parser-backed, binding-aware rules.
-- **Build** React, Vite, and Next.js projects and measure emitted assets.
+- **Build** JavaScript, React, Create React App, Vite, and Next.js projects and measure emitted assets.
 - **Load** a real URL in Chromium and collect repeatable lab metrics.
-- **Optimize** with reviewable patches, explicit authorization, validation, and rollback.
+- **Optimize** with reviewable patches, explicit authorization, validation, and conflict-safe rollback.
 - **Benchmark** commands with environment-aware regression comparisons.
 - **Profile** Node.js processes for CPU, memory, and event-loop behavior.
 
-Velocity keeps **heuristics** and **measurements** separate. Static findings and the health score are indicators; build, load, benchmark, and profile values are measurements from the environment that produced them.
+Velocity keeps **heuristics** and **measurements** separate. Static findings and the health score are indicators; build, load, benchmark, and profile values are measurements from the environment that produced them. When a value was not measured, Velocity reports `null` rather than inventing zero.
 
 ## Why Velocity?
 
@@ -30,8 +30,8 @@ Performance tooling is often split across linters, bundle analyzers, ad-hoc benc
 - **CI-first:** save baselines, compare later, and return deterministic exit codes.
 - **Evidence-first:** measured regressions are preferred over score changes whenever possible.
 - **Reviewable:** optimizations expose evidence, impact, risk, files, and a unified diff before anything changes.
-- **Conservative:** no destructive Git reset, no telemetry, no hidden uploads, and no automatic lazy-loading decision based only on JSX source order.
-- **Cross-platform:** CI verifies Node.js 20, 22, and 24 on Linux plus Node.js 22 on Windows and macOS.
+- **Conservative:** no destructive Git reset, no telemetry, no hidden uploads, no invented compression metrics, and no automatic lazy-loading decision based on JSX source order.
+- **Cross-platform:** CI verifies Node.js 20, 22, and 24 on Linux plus Node.js 22 on Windows and macOS, with an additional mandatory Ubuntu job using a real Chromium revision.
 
 ## Quick start
 
@@ -101,7 +101,7 @@ Velocity emits SARIF 2.1.0 with rule metadata, severity, locations, help links, 
 | --- | --- | --- |
 | `analyze [path]` | Static performance-risk patterns | Local review, JSON/SARIF output |
 | `check [path]` | Severity + heuristic score budgets | CI gate |
-| `build [path]` | Raw, gzip, Brotli asset sizes | Bundle budgets and regressions |
+| `build [path]` | Emitted artifact sizes | Bundle budgets and regressions |
 | `load <url>` | Browser lab metrics | Front-end runtime regression checks |
 | `optimize [path]` | Reviewable source changes | Explicit, validated fixes |
 | `verify [path]` | Before/after build or load evidence | Improvement classification |
@@ -118,36 +118,57 @@ Measure a production build and enforce bundle budgets:
 
 ```bash
 velocity build . --save .velocity/build-before.json \
-  --max-initial-js 250 --max-total-js 600 --max-css 100 --max-chunk 200
+  --max-initial-js 250 \
+  --max-total-js 600 \
+  --max-css 100 \
+  --max-asset 500 \
+  --max-total-assets 2000 \
+  --max-chunk 200
 
 velocity build . \
   --compare .velocity/build-before.json \
   --max-regression 2
 ```
 
-Velocity detects Vite, React, and Next.js, runs the declared build unless `--no-build` is set, reads framework manifests, identifies initial and route chunks, and measures emitted JavaScript, CSS, images, fonts, and other assets in raw, gzip, and Brotli bytes. Next.js `public/` assets are included.
+`maxAssetKb` / `--max-asset` means the **largest individual emitted artifact**. `maxTotalAssetsKb` / `--max-total-assets` means the total raw size of all emitted artifacts.
+
+Velocity detects Vite and Next.js from their package/config signals, distinguishes Create React App from plain React, and runs the declared build unless `--no-build` is set. Vite and Next.js use their available build manifests for initial/chunk/route attribution; when a Next.js route cannot be attributed from real manifest data, its size is `null`, not zero.
+
+Raw bytes are always the actual file size. gzip and Brotli are measured only for known text formats. Already-compressed or binary formats such as PNG, JPEG, WebP, AVIF, GIF, WOFF2, video, and archives keep `gzipBytes` / `brotliBytes` as `null` rather than receiving synthetic compression values. Artifact work is deterministic, concurrency-limited, and guarded by a maximum per-artifact read size.
 
 ## Real-browser load measurement
 
 Measure an actual URL in Chromium:
 
 ```bash
-velocity load https://localhost:4173 \
+velocity load http://localhost:4173 \
   --device mobile \
   --runs 3 \
   --timeout 30000 \
   --save .velocity/load-before.json
 
-velocity load https://localhost:4173 \
-  --device desktop \
+velocity load http://localhost:4173 \
+  --device mobile \
   --runs 3 \
-  --compare .velocity/load-desktop-before.json \
+  --compare .velocity/load-before.json \
   --margin 5
 ```
 
-`load` collects FCP, LCP, CLS, TBT, Speed Index, TTFB, request count, and transferred bytes. Threshold-based recommendations are kept separate from measurements.
+`load` collects FCP, LCP, CLS, TBT, TTFB, request count, transferred bytes, and Velocity's optional `visualProgressIndexMs`. Missing metrics are `null`; a numeric zero is kept only when the browser actually measured zero.
 
-TBT is calculated from lab long tasks and is always labeled **TBT**; it is never presented as INP. Mobile runs use explicit network and CPU throttling. Speed Index is calculated from a 200 ms PNG filmstrip.
+`visualProgressIndexMs` is a **Velocity-specific visual-progress approximation**, not Lighthouse Speed Index. It uses a 200 ms PNG filmstrip and is collected in a separate navigation so screenshot sampling does not contaminate the primary FCP/LCP/TBT run. Disable that additional navigation with `--no-visual`; the field remains present as `null`.
+
+TBT is calculated from observed lab long tasks and is always labeled **TBT**; it is never presented as INP. Mobile runs use explicit network and CPU throttling. The report records the actual Chromium version/major version, observed user agent, viewport, throttling profile, platform, architecture, and measurement protocol.
+
+Load comparisons require the same URL and compatible measurement protocol. Browser, browser major version, device, viewport, throttling, platform, and architecture mismatches are rejected by default. If you intentionally need to inspect unlike environments, pass `--allow-environment-mismatch`; the comparison is then always `inconclusive`, never promoted to a reliable improvement/regression verdict.
+
+Chromium certificate validation stays enabled by default. For a local HTTPS endpoint using a self-signed or otherwise untrusted certificate, opt in explicitly:
+
+```bash
+velocity load https://localhost:4173 --ignore-https-errors
+```
+
+Without that flag, the certificate error is allowed to fail the measurement.
 
 ## Reviewable optimization
 
@@ -159,17 +180,19 @@ velocity optimize . --apply --fix size-image-0123456789ab
 velocity verify .
 ```
 
-Every proposed change includes a classification (`safe-fix`, `measured-fix`, `review-required`, or `recommendation`), evidence, expected impact, risk, affected files, and unified diff.
+Every proposed change includes a classification, evidence, expected impact, risk, affected files, and unified diff. Velocity currently ships **no built-in `measured-fix` transformation**. A finding may be measured before/after, but Velocity does not label a source rewrite as measured without that evidence.
 
-`--apply` requires each optimization ID explicitly. Velocity snapshots only affected files, checks that patch context has not changed, and runs build, typecheck, and tests. On failure it restores only files changed by the current Velocity run.
+Image intrinsic dimensions are intentionally `review-required`, not `safe-fix`. Velocity can resolve local PNG, JPEG, SVG, and WebP VP8X dimensions through literal/public paths, Vite/Next-style imports, and `new URL(..., import.meta.url)`, but responsive CSS and framework image semantics still require review.
 
-A `measured-fix` is also restored when before/after evidence does not prove an improvement above the configured noise margin.
+`loading="lazy"` is never inferred from JSX source order. An image without an explicit loading policy is a recommendation to verify viewport position with real browser evidence.
+
+`--apply` requires each optimization ID explicitly. Velocity snapshots only affected files, records hashes and permissions, checks patch context, preserves file mode, and runs build, typecheck, and tests. Rollback only overwrites a file when its current hash is still the hash Velocity expects. If another process or person changed the file after the patch was applied, Velocity preserves that edit and writes a recovery artifact under `.velocity/recovery/<run-id>/` instead of clobbering it.
 
 ```bash
 velocity verify --before report-before.json --after report-after.json
 ```
 
-Verification classifies the result as `improved`, `unchanged`, `inconclusive`, `regressed`, or `failed`.
+Verification classifies the result as `improved`, `unchanged`, `inconclusive`, `regressed`, or `failed`. Load verification accepts `--allow-environment-mismatch` with the same always-inconclusive rule described above.
 
 ## Static analysis
 
@@ -209,11 +232,18 @@ velocity config --print [path]
 
 `velocity.config.json` is discovered from the target directory upward; the nearest file wins. Unknown properties, invalid values, and unknown rule IDs fail with the exact JSON property path.
 
+Bundle budgets support `maxInitialJavaScriptKb`, `maxTotalJavaScriptKb`, `maxCssKb`, `maxAssetKb`, `maxTotalAssetsKb`, and `maxChunkKb`.
+
 ```json
 {
   "minScore": 80,
   "maxFileSizeKb": 250,
   "failOn": "error",
+  "bundleBudgets": {
+    "maxInitialJavaScriptKb": 250,
+    "maxAssetKb": 500,
+    "maxTotalAssetsKb": 2000
+  },
   "rules": {
     "js/repeated-array-passes": "off",
     "async/no-await-in-loop": "warning"
@@ -273,14 +303,7 @@ velocity profile --save .velocity/profile.json -- node worker.js
 
 The profiler accepts a direct `node` executable, preserves existing `NODE_OPTIONS`, supports paths with spaces, gives each process a collision-free report path, and reads only the main child report.
 
-It records:
-
-- process duration;
-- user/system CPU time;
-- final RSS and sampled peak RSS;
-- final heap and external memory;
-- event-loop utilization;
-- event-loop delay.
+It records process duration, user/system CPU time, final RSS and sampled peak RSS, final heap and external memory, event-loop utilization, and event-loop delay.
 
 Peak RSS is sampled every 25 ms and can miss extremely short peaks. Heap and external values are final values, not peaks. Exit hooks that never run — for example under forceful termination — cannot produce a report.
 
@@ -328,13 +351,14 @@ stdout contains the requested result. Errors and diagnostics use stderr. JSON an
 ## Compatibility and limitations
 
 - Runtime requirement: Node.js `>=20`.
-- CI verifies Node.js 20, 22, and 24 on Linux plus Node.js 22 on Windows and macOS.
+- CI verifies Node.js 20, 22, and 24 on Linux plus Node.js 22 on Windows and macOS; the mandatory Ubuntu browser job installs and executes the `playwright-core` Chromium revision and validates generated load JSON.
 - Static rules identify risk patterns, not proven slowdowns. They do not perform whole-program data flow or runtime hot-path detection.
 - `async/no-await-in-loop` is contextual. Sequential iteration may be correct for ordering, rate limits, dependencies, or bounded memory; Velocity never recommends unbounded `Promise.all()` as a universal fix.
-- Benchmark results depend on machine load, power state, caches, and environment. Use controlled runners and enough samples.
+- Benchmark and browser results depend on machine load, power state, caches, browser version, throttling, and environment. Compare only compatible baselines.
+- `visualProgressIndexMs` is a Velocity approximation and must not be interpreted as Lighthouse Speed Index.
 - The profiler covers the main Node process. Child processes write isolated data but are not aggregated.
-- Velocity has no telemetry, hosted service, plugin API, or hidden uploads.
-- Source rewrites happen only through explicit `optimize --apply --fix <id>` selections with scoped snapshots.
+- Velocity has no telemetry, hosted service, plugin API, hidden uploads, or built-in `measured-fix` transformation.
+- Source rewrites happen only through explicit `optimize --apply --fix <id>` selections with scoped snapshots and conflict-safe recovery.
 
 ## Development
 
@@ -343,15 +367,16 @@ npm ci
 npm run lint
 npm run typecheck
 npm run test:coverage
+npm run validate:schemas
 npm run check
 npm pack --dry-run
 ```
 
-CI runs cross-platform tests, self-analysis, coverage gates, SARIF generation, and a packed-tarball smoke test.
+CI runs cross-platform tests, self-analysis, coverage gates, schema validation, SARIF generation, a packed-tarball consumer smoke, and mandatory real Chromium HTTP/HTTPS tests.
 
 ## Release engineering
 
-Publishing is isolated from CI in `.github/workflows/publish.yml`. Releases use npm Trusted Publishing/OIDC with provenance instead of a long-lived write token, validate the requested package version, serialize publish jobs, run the full release checks, inspect the tarball, and create the matching GitHub Release from the changelog.
+Publishing is isolated in `.github/workflows/publish.yml` and does not happen from ordinary CI pushes. A release commit on `main` or an explicit manual dispatch runs the complete package gate, validates the exact package/changelog identity, checks whether npm already owns the version and commit, runs the real-browser smoke, compares dry-run and actual tarball contents, inspects and installs the exact tarball outside the repository, publishes that validated tarball through npm Trusted Publishing/OIDC, verifies npm `gitHead`, and creates the matching GitHub Release from non-empty changelog notes.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
