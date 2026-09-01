@@ -73,7 +73,7 @@ jobs:
           grep -Eq '[^[:space:]]' release-notes.md || { echo "Release notes for ${VERSION} are empty" >&2; exit 1; }
           grep -Eq '^- ' release-notes.md || { echo "Release notes for ${VERSION} contain no change entries" >&2; exit 1; }
 
-      - name: Reject an existing version from another commit
+      - name: Check registry version state
         id: registry
         shell: bash
         env:
@@ -81,16 +81,23 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          published=$(npm view "${PACKAGE}@${VERSION}" version --json 2>/dev/null || true)
-          if [[ -n "$published" && "$published" != "null" ]]; then
+          set +e
+          registry_output=$(npm view "${PACKAGE}@${VERSION}" version --json 2>&1)
+          registry_status=$?
+          set -e
+          if [[ "$registry_status" -eq 0 ]]; then
             git_head=$(npm view "${PACKAGE}@${VERSION}" gitHead --json 2>/dev/null | tr -d '"' || true)
             if [[ "$git_head" != "$GITHUB_SHA" ]]; then
               echo "${PACKAGE}@${VERSION} already exists from gitHead ${git_head:-unknown}, not $GITHUB_SHA" >&2
               exit 1
             fi
             echo "already_published=true" >> "$GITHUB_OUTPUT"
-          else
+          elif grep -Eqi 'E404|No match found for version|is not in this registry|Not Found' <<<"$registry_output"; then
             echo "already_published=false" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "$registry_output" >&2
+            echo "Unable to determine registry state for ${PACKAGE}@${VERSION}" >&2
+            exit "$registry_status"
           fi
 
       - name: Run the complete package gate
@@ -128,9 +135,12 @@ jobs:
           const paths = value => value.files.map(file => file.path).sort();
           if (JSON.stringify(paths(dry)) !== JSON.stringify(paths(packed))) throw new Error('npm pack --dry-run and the real tarball contain different file sets');
           if (dry.unpackedSize !== packed.unpackedSize) throw new Error('npm pack --dry-run and the real tarball have different unpacked sizes');
+          if (!packed.integrity) throw new Error('npm pack did not report tarball integrity');
           fs.writeFileSync('package-file.txt', packed.filename);
+          fs.writeFileSync('package-integrity.txt', packed.integrity);
           NODE
           package_file=$(cat package-file.txt)
+          package_integrity=$(cat package-integrity.txt)
           test -s "$package_file"
           tar -xOf "$package_file" package/package.json > packed-package.json
           test "$(node -p "require('./packed-package.json').name")" = "$PACKAGE"
@@ -146,6 +156,7 @@ jobs:
             exit 1
           fi
           echo "package_file=$package_file" >> "$GITHUB_OUTPUT"
+          echo "integrity=$package_integrity" >> "$GITHUB_OUTPUT"
 
       - name: Install and consume the exact tarball outside the repository
         shell: bash
@@ -166,25 +177,25 @@ jobs:
           printf 'import { getRuleCatalog } from "@wess2001/velocity"; if (!getRuleCatalog().length) process.exit(1);\n' > consumer.mjs
           node consumer.mjs
 
-      - name: Publish the validated tarball
+      - name: Publish the validated release checkout
         if: steps.registry.outputs.already_published != 'true'
-        env:
-          PACKAGE_FILE: ${{ steps.pack.outputs.package_file }}
-        run: npm publish "$PACKAGE_FILE" --access public
+        run: npm publish . --ignore-scripts --access public
 
-      - name: Verify npm provenance identity
+      - name: Verify npm commit and tarball identity
         shell: bash
         env:
           PACKAGE: ${{ steps.release.outputs.name }}
           VERSION: ${{ steps.release.outputs.version }}
+          EXPECTED_INTEGRITY: ${{ steps.pack.outputs.integrity }}
         run: |
           set -euo pipefail
           for attempt in {1..12}; do
             git_head=$(npm view "${PACKAGE}@${VERSION}" gitHead --json 2>/dev/null | tr -d '"' || true)
-            [[ "$git_head" == "$GITHUB_SHA" ]] && exit 0
+            registry_integrity=$(npm view "${PACKAGE}@${VERSION}" dist.integrity --json 2>/dev/null | tr -d '"' || true)
+            [[ "$git_head" == "$GITHUB_SHA" && "$registry_integrity" == "$EXPECTED_INTEGRITY" ]] && exit 0
             sleep 5
           done
-          echo "Published npm gitHead does not match $GITHUB_SHA" >&2
+          echo "Published npm metadata does not match commit $GITHUB_SHA and validated tarball integrity" >&2
           exit 1
 
       - name: Create GitHub Release from the validated notes
