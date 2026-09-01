@@ -16,9 +16,9 @@ test("builds and measures the complete React + Vite fixture", async () => {
     assert.ok(report.summary.javascript.brotliBytes < report.summary.javascript.gzipBytes);
     assert.ok(report.summary.css.files > 0);
     assert.equal(report.summary.images.files, 2);
-    assert.ok(report.artifacts.some((item) => item.category === "image" && item.compression === "not-applicable" && item.gzipBytes === null));
-    assert.ok(report.artifacts.some((item) => item.category === "image" && item.compression === "measured" && Number.isFinite(item.gzipBytes)));
-    assert.equal(report.summary.total.gzipBytes, null);
+    assert.ok(report.artifacts.filter((item) => item.category === "image").every((item) => item.compression === "measured" && Number.isFinite(item.gzipBytes)));
+    assert.ok(Number.isFinite(report.summary.images.gzipBytes));
+    assert.ok(Number.isFinite(report.summary.total.gzipBytes));
     assert.ok(report.insights.entries.length > 0);
     assert.equal(report.budgetViolations.length, 0);
   } finally { await fixture.cleanup(); }
