@@ -38,6 +38,8 @@ jobs:
         shell: bash
         env:
           REQUESTED_VERSION: ${{ github.event.inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           package_name=$(node -p "require('./package.json').name")
@@ -48,7 +50,7 @@ jobs:
             exit 1
           fi
           node -e 'const v=process.argv[1]; if(!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v)) process.exit(1)' "$package_version"
-          if [[ "${{ github.event_name }}" == "push" ]] && [[ "${{ github.event.head_commit.message }}" != release:\ v${package_version}* ]]; then
+          if [[ "$EVENT_NAME" == "push" ]] && [[ "$HEAD_MESSAGE" != release:\ v${package_version}* ]]; then
             echo "Automatic publishing is allowed only from an explicit release: v${package_version} main commit" >&2
             exit 1
           fi
@@ -98,7 +100,9 @@ jobs:
         run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Resolve exact Chromium executable
         shell: bash
-        run: echo "CHROME_PATH=$(node --input-type=module -e \"import { chromium } from 'playwright-core'; process.stdout.write(chromium.executablePath())\")" >> "$GITHUB_ENV"
+        run: |
+          chrome_path=$(node --input-type=module -e "import { chromium } from 'playwright-core'; process.stdout.write(chromium.executablePath())")
+          printf 'CHROME_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
       - name: Browser smoke before publish
         shell: bash
         run: |
