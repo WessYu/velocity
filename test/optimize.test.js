@@ -11,7 +11,8 @@ test("dry-run emits classified evidence, impact, risk, files, and reviewable pat
     const plan = await createOptimizationPlan(fixture.directory);
     assert.equal(plan.mode, "dry-run");
     assert.equal(plan.framework, "Vite");
-    assert.ok(plan.optimizations.some((item) => item.classification === "safe-fix"));
+    assert.ok(plan.optimizations.some((item) => item.classification === "review-required"));
+    assert.equal(plan.optimizations.some((item) => item.classification === "measured-fix"), false);
     assert.equal(plan.optimizations.some((item) => item.id.startsWith("lazy-image-")), false);
     assert.ok(plan.findings.some((item) => item.id === "image/review-loading-policy"));
     for (const item of plan.optimizations) {
@@ -21,13 +22,13 @@ test("dry-run emits classified evidence, impact, risk, files, and reviewable pat
   } finally { await fixture.cleanup(); }
 });
 
-test("apply changes only an authorized safe fix, validates the project, and creates a scoped snapshot", { timeout: 60_000 }, async () => {
+test("apply changes only an authorized review-required fix, validates the project, and creates a scoped snapshot", { timeout: 60_000 }, async () => {
   const fixture = await temporaryFixture("vite-app");
   try {
     const unrelated = path.join(fixture.directory, "user-change.txt");
     await writeFile(unrelated, "preserve me\n");
     const plan = await createOptimizationPlan(fixture.directory);
-    const fix = plan.optimizations.find((item) => item.classification === "safe-fix");
+    const fix = plan.optimizations.find((item) => item.classification === "review-required" && item.id.startsWith("size-image-"));
     const run = await applyOptimizations(fixture.directory, { fixes: [fix.id] });
     assert.equal(run.rolledBack.length, 0);
     assert.ok(run.validation.passed);
@@ -61,10 +62,11 @@ test("restores only Velocity changes when post-apply validation fails", { timeou
     const original = await readFile(sourceFile, "utf8");
     await writeFile(path.join(fixture.directory, "vite.config.js"), "import{readFileSync}from'node:fs';const source=readFileSync('src/App.jsx','utf8');if(source.includes('width={1200}'))throw new Error('fixture build regression');export default{build:{manifest:true}};\n");
     const plan = await createOptimizationPlan(fixture.directory);
-    const fix = plan.optimizations.find((item) => item.classification === "safe-fix");
+    const fix = plan.optimizations.find((item) => item.id.startsWith("size-image-"));
     const run = await applyOptimizations(fixture.directory, { fixes: [fix.id] });
     assert.equal(run.verification.classification, "failed");
     assert.deepEqual(run.rolledBack, [fix.id]);
+    assert.equal(run.rollbackConflicts.length, 0);
     assert.equal(await readFile(sourceFile, "utf8"), original);
     assert.equal(run.validation.steps[0].name, "build");
     assert.equal(run.validation.steps[0].status, "failed");

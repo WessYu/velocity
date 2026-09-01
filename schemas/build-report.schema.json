@@ -3,26 +3,30 @@
   "$id": "https://raw.githubusercontent.com/WessYu/velocity/main/schemas/build-report.schema.json",
   "title": "Velocity build report",
   "type": "object",
-  "required": ["schemaVersion", "kind", "framework", "artifacts", "summary", "insights", "budgetViolations"],
+  "required": ["schemaVersion", "kind", "framework", "adapter", "artifacts", "summary", "insights", "budgetViolations"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "kind": { "const": "build" },
-    "framework": { "enum": ["React", "Vite", "Next.js", "JavaScript"] },
+    "framework": { "enum": ["React", "Create React App", "Vite", "Next.js", "JavaScript"] },
+    "adapter": { "type": "object", "required": ["adapter", "detection", "initialFileSource", "capabilities"] },
+    "artifactMeasurement": { "type": "object" },
     "artifacts": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
     "summary": { "type": "object" },
     "insights": { "type": "object" },
     "budgetViolations": { "type": "array" }
   },
   "$defs": {
+    "nullableBytes": { "type": ["integer", "null"], "minimum": 0 },
     "artifact": {
       "type": "object",
-      "required": ["file", "category", "rawBytes", "gzipBytes", "brotliBytes", "initial"],
+      "required": ["file", "category", "rawBytes", "gzipBytes", "brotliBytes", "compression", "initial"],
       "properties": {
         "file": { "type": "string" },
         "category": { "enum": ["javascript", "css", "image", "font", "asset"] },
         "rawBytes": { "type": "integer", "minimum": 0 },
-        "gzipBytes": { "type": "integer", "minimum": 0 },
-        "brotliBytes": { "type": "integer", "minimum": 0 },
+        "gzipBytes": { "$ref": "#/$defs/nullableBytes" },
+        "brotliBytes": { "$ref": "#/$defs/nullableBytes" },
+        "compression": { "enum": ["measured", "not-applicable", "skipped-size-limit"] },
         "initial": { "type": "boolean" }
       }
     }

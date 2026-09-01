@@ -14,7 +14,7 @@ export const defaultConfig = Object.freeze({
 
 const allowedKeys = new Set(["$schema", "minScore", "maxFileSizeKb", "failOn", "rules", "ignore", "bundleBudgets"]);
 const settings = new Set(["off", "info", "warning", "error"]);
-const budgetKeys = new Set(["maxInitialJavaScriptKb", "maxTotalJavaScriptKb", "maxCssKb", "maxAssetKb", "maxChunkKb"]);
+const budgetKeys = new Set(["maxInitialJavaScriptKb", "maxTotalJavaScriptKb", "maxCssKb", "maxAssetKb", "maxTotalAssetsKb", "maxChunkKb"]);
 
 export class ConfigError extends Error {
   constructor(propertyPath, message) {

@@ -35,10 +35,10 @@ Run velocity <command> --help for command-specific options.`;
 const commandHelp = {
   analyze: "Usage: velocity analyze [path] [--format human|json|sarif] [--save file] [--min-score 70] [--no-color]",
   check: "Usage: velocity check [path] [--format human|json|sarif] [--save file] [--min-score 70] [--no-color]",
-  build: "Usage: velocity build [path] [--no-build] [--output-dir dir] [--save file] [--compare file] [--max-regression 0] [--max-initial-js kb] [--max-total-js kb] [--max-css kb] [--max-asset kb] [--max-chunk kb] [--format human|json]",
-  load: "Usage: velocity load <url> [--device mobile|desktop] [--runs 3] [--timeout 30000] [--browser path] [--save file] [--compare file] [--margin 5] [--format human|json]",
+  build: "Usage: velocity build [path] [--no-build] [--output-dir dir] [--save file] [--compare file] [--max-regression 0] [--max-initial-js kb] [--max-total-js kb] [--max-css kb] [--max-asset kb] [--max-total-assets kb] [--max-chunk kb] [--format human|json]",
+  load: "Usage: velocity load <url> [--device mobile|desktop] [--runs 3] [--timeout 30000] [--browser path] [--no-visual] [--ignore-https-errors] [--save file] [--compare file] [--margin 5] [--allow-environment-mismatch] [--format human|json]",
   optimize: "Usage: velocity optimize [path] [--dry-run] [--apply --fix id ...] [--margin 2] [--save file] [--format human|json]",
-  verify: "Usage: velocity verify [path] [--before report.json --after report.json] [--margin 2] [--format human|json]",
+  verify: "Usage: velocity verify [path] [--before report.json --after report.json] [--margin 2] [--allow-environment-mismatch] [--format human|json]",
   compare: "Usage: velocity compare <baseline.json> [path] [--max-score-drop 0] [--format human|json] [--no-color]",
   bench: "Usage: velocity bench [--runs 5] [--warmup 1] [--save file] [--compare file] [--max-regression 10] [--allow-environment-mismatch] [--format human|json] -- <command> [...args]",
   profile: "Usage: velocity profile [--save file] [--format human|json] -- <node-command> [...args]",
@@ -127,13 +127,13 @@ async function compareCommand(args) {
 }
 
 async function buildCommand(args) {
-  const specification = { "--no-build": "boolean", "--output-dir": "value", "--save": "value", "--compare": "value", "--max-regression": "value", "--max-initial-js": "value", "--max-total-js": "value", "--max-css": "value", "--max-asset": "value", "--max-chunk": "value", "--format": "value", "--json": "boolean", "--help": "boolean", "-h": "boolean" };
+  const specification = { "--no-build": "boolean", "--output-dir": "value", "--save": "value", "--compare": "value", "--max-regression": "value", "--max-initial-js": "value", "--max-total-js": "value", "--max-css": "value", "--max-asset": "value", "--max-total-assets": "value", "--max-chunk": "value", "--format": "value", "--json": "boolean", "--help": "boolean", "-h": "boolean" };
   const { options, positionals } = parseOptions(args, specification);
   if (options["--help"] || options["-h"]) return print(commandHelp.build);
   if (positionals.length > 1) throw new CliError("build accepts at most one path");
   const target = positionals[0] ?? process.cwd();
   const loaded = await loadConfig(target);
-  const budgetFlags = { maxInitialJavaScriptKb: "--max-initial-js", maxTotalJavaScriptKb: "--max-total-js", maxCssKb: "--max-css", maxAssetKb: "--max-asset", maxChunkKb: "--max-chunk" };
+  const budgetFlags = { maxInitialJavaScriptKb: "--max-initial-js", maxTotalJavaScriptKb: "--max-total-js", maxCssKb: "--max-css", maxAssetKb: "--max-asset", maxTotalAssetsKb: "--max-total-assets", maxChunkKb: "--max-chunk" };
   const budgets = { ...loaded.config.bundleBudgets };
   for (const [key, flag] of Object.entries(budgetFlags)) if (options[flag] !== undefined) budgets[key] = numberOption(options[flag], flag, undefined, { min: 0.001 });
   const report = await analyzeBuild(target, { runBuild: !options["--no-build"], outputDirectory: options["--output-dir"], budgets });
@@ -145,22 +145,23 @@ async function buildCommand(args) {
     const comparison = compareBuilds(baseline, report);
     print(format === "json" ? JSON.stringify(comparison, null, 2) : formatBuildComparison(comparison));
     const maxRegression = numberOption(options["--max-regression"], "--max-regression", 0, { min: 0 });
-    if (comparison.metrics.initialJavaScriptBrotli.changePercent > maxRegression) process.exitCode = 1;
+    const metric = comparison.metrics.initialJavaScriptBrotli;
+    if (Number.isFinite(metric.changePercent) && metric.changePercent > maxRegression) process.exitCode = 1;
   }
   if (report.budgetViolations.length) process.exitCode = 1;
 }
 
 async function loadCommand(args) {
-  const { options, positionals } = parseOptions(args, { "--device": "value", "--runs": "value", "--timeout": "value", "--browser": "value", "--save": "value", "--compare": "value", "--margin": "value", "--format": "value", "--json": "boolean", "--help": "boolean", "-h": "boolean" });
+  const { options, positionals } = parseOptions(args, { "--device": "value", "--runs": "value", "--timeout": "value", "--browser": "value", "--no-visual": "boolean", "--ignore-https-errors": "boolean", "--allow-environment-mismatch": "boolean", "--save": "value", "--compare": "value", "--margin": "value", "--format": "value", "--json": "boolean", "--help": "boolean", "-h": "boolean" });
   if (options["--help"] || options["-h"]) return print(commandHelp.load);
   if (positionals.length !== 1) throw new CliError("load requires exactly one URL");
   const { compareLoads, measureLoad } = await import("./load.js");
-  const report = await measureLoad(positionals[0], { device: options["--device"] ?? "mobile", runs: numberOption(options["--runs"], "--runs", 3, { integer: true, min: 1, max: 10 }), timeoutMs: numberOption(options["--timeout"], "--timeout", 30_000, { integer: true, min: 1_000, max: 120_000 }), browserPath: options["--browser"] });
+  const report = await measureLoad(positionals[0], { device: options["--device"] ?? "mobile", runs: numberOption(options["--runs"], "--runs", 3, { integer: true, min: 1, max: 10 }), timeoutMs: numberOption(options["--timeout"], "--timeout", 30_000, { integer: true, min: 1_000, max: 120_000 }), browserPath: options["--browser"], visual: !options["--no-visual"], ignoreHTTPSErrors: Boolean(options["--ignore-https-errors"]) });
   if (options["--save"]) await saveJson(options["--save"], report);
   const format = outputFormat(options, ["human", "json"]);
   if (!options["--compare"]) return print(format === "json" ? JSON.stringify(report, null, 2) : formatLoad(report));
   const baseline = JSON.parse(await readFile(path.resolve(options["--compare"]), "utf8"));
-  const comparison = compareLoads(baseline, report, { marginPercent: numberOption(options["--margin"], "--margin", 5, { min: 0 }) });
+  const comparison = compareLoads(baseline, report, { marginPercent: numberOption(options["--margin"], "--margin", 5, { min: 0 }), allowEnvironmentMismatch: Boolean(options["--allow-environment-mismatch"]) });
   print(format === "json" ? JSON.stringify(comparison, null, 2) : formatLoadComparison(comparison));
   if (["regressed", "failed"].includes(comparison.classification)) process.exitCode = 1;
 }
@@ -183,12 +184,12 @@ async function optimizeCommand(args) {
 }
 
 async function verifyCommand(args) {
-  const { options, positionals } = parseOptions(args, { "--before": "value", "--after": "value", "--margin": "value", "--format": "value", "--json": "boolean", "--help": "boolean", "-h": "boolean" });
+  const { options, positionals } = parseOptions(args, { "--before": "value", "--after": "value", "--margin": "value", "--allow-environment-mismatch": "boolean", "--format": "value", "--json": "boolean", "--help": "boolean", "-h": "boolean" });
   if (options["--help"] || options["-h"]) return print(commandHelp.verify);
   if (positionals.length > 1) throw new CliError("verify accepts at most one path");
   if (Boolean(options["--before"]) !== Boolean(options["--after"])) throw new CliError("--before and --after must be provided together");
   const { verifyProject } = await import("./optimize.js");
-  const result = await verifyProject(positionals[0] ?? process.cwd(), { before: options["--before"], after: options["--after"], marginPercent: numberOption(options["--margin"], "--margin", 2, { min: 0 }) });
+  const result = await verifyProject(positionals[0] ?? process.cwd(), { before: options["--before"], after: options["--after"], marginPercent: numberOption(options["--margin"], "--margin", 2, { min: 0 }), allowEnvironmentMismatch: Boolean(options["--allow-environment-mismatch"]) });
   const format = outputFormat(options, ["human", "json"]);
   print(format === "json" ? JSON.stringify(result, null, 2) : formatVerification(result));
   if (["regressed", "failed"].includes(result.classification)) process.exitCode = 1;

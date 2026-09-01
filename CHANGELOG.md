@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.1 - 2026-08-31
+
+### Fixed
+
+- Report unavailable browser measurements as `null` instead of fabricating zero values.
+- Rename Velocity's custom visual metric from `speedIndexMs` to `visualProgressIndexMs`; it is explicitly documented as an approximation, not Lighthouse Speed Index, and is collected in a separate navigation.
+- Record the real Chromium version/major version and a user agent coherent with that browser, while keeping TLS certificate validation enabled unless `--ignore-https-errors` is explicit.
+- Validate load URL, measurement protocol, browser, browser major version, device, viewport, throttling, platform, and architecture before comparison. `--allow-environment-mismatch` is explicit and always produces `inconclusive`.
+- Bound build artifact work with deterministic ordering, limited concurrency, and a maximum per-artifact compression read size.
+- Stop reporting synthetic gzip/Brotli sizes for already-compressed or binary assets such as PNG, JPEG, WebP, AVIF, GIF, WOFF2, video, and archives.
+- Correct `maxAssetKb` to mean the largest individual artifact and add `maxTotalAssetsKb` for total emitted raw bytes.
+- Use real Next.js Pages/App Router manifests for route attribution and represent unavailable route sizes as `null` instead of zero.
+- Distinguish plain React projects from Create React App rather than assuming any React dependency implies CRA output semantics.
+- Make intrinsic image-dimension proposals `review-required` across literal/public paths, Vite/Next-style imports, `new URL(..., import.meta.url)`, PNG, JPEG, SVG, and WebP VP8X.
+- Never infer `loading="lazy"` safety from JSX source order.
+- Preserve file permissions during optimization writes and rollback, verify hashes before restore, preserve concurrent edits, and create recovery artifacts when automatic rollback would overwrite external work.
+- Remove `measured-fix` from the shipped optimization contract because Velocity does not include a built-in transformation with measured proof.
+
+### Changed
+
+- Add `--no-visual`, `--ignore-https-errors`, `--allow-environment-mismatch`, and `--max-total-assets` CLI contracts and synchronize ESM types, JSON schemas, reporters, configuration, and documentation.
+- Adapter capabilities now describe only concrete measurement/manifest behavior instead of promotional optimization claims.
+- CI includes a mandatory Ubuntu Chromium HTTP/HTTPS smoke and validates generated JSON against the shipped schemas.
+- Release publishing validates exact package/changelog identity, registry commit identity, full checks, real Chromium behavior, dry-run versus actual tarball contents, packed package metadata, external installation, and npm `gitHead` before creating the GitHub Release.
+
+### Compatibility
+
+- Regenerate 0.3.0 `load` baselines before comparing with 0.3.1 because the custom visual metric name and measurement protocol were corrected.
+- Build consumers must accept `gzipBytes` and `brotliBytes` as `null` when compression is not a meaningful measured value.
+- Supported and CI-verified Node.js lines remain 20, 22, and 24 on Linux, with Node.js 22 additionally verified on Windows and macOS.
+- Existing commands and named ESM API exports remain available.
+
+### Safety
+
+- Optimization rollback never overwrites a file whose current hash no longer matches Velocity's expected post-write hash; a recovery artifact is emitted instead.
+- HTTPS certificate errors are never ignored implicitly.
+- Environment mismatches can be inspected only through an explicit override and cannot produce a conclusive load verdict.
+- Release publishing remains outside ordinary CI and uses npm Trusted Publishing/OIDC rather than a long-lived write token.
+
 ## 0.3.0 - 2026-08-29
 
 ### Added

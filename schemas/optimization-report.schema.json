@@ -8,6 +8,10 @@
     "schemaVersion": { "const": 1 },
     "kind": { "enum": ["optimization-plan", "optimization-run", "verification"] },
     "optimizations": { "type": "array", "items": { "$ref": "#/$defs/optimization" } },
+    "selected": { "type": "array", "items": { "$ref": "#/$defs/optimization" } },
+    "rolledBack": { "type": "array", "items": { "type": "string" } },
+    "rollbackConflicts": { "type": "array", "items": { "$ref": "#/$defs/rollbackConflict" } },
+    "recoveryArtifacts": { "type": "array", "items": { "type": "string" } },
     "classification": { "enum": ["improved", "unchanged", "inconclusive", "regressed", "failed"] }
   },
   "$defs": {
@@ -15,8 +19,19 @@
       "type": "object",
       "required": ["id", "classification", "evidence", "expectedImpact", "risk", "files"],
       "properties": {
-        "classification": { "enum": ["safe-fix", "measured-fix", "review-required", "recommendation"] },
+        "classification": { "enum": ["safe-fix", "review-required", "recommendation"] },
         "files": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "rollbackConflict": {
+      "type": "object",
+      "required": ["file", "recovery", "expectedHash", "actualHash", "originalHash"],
+      "properties": {
+        "file": { "type": "string" },
+        "recovery": { "type": "string" },
+        "expectedHash": { "type": "string" },
+        "actualHash": { "type": ["string", "null"] },
+        "originalHash": { "type": "string" }
       }
     }
   }

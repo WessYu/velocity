@@ -18,6 +18,7 @@
         "maxTotalJavaScriptKb": { "$ref": "#/$defs/positiveKb" },
         "maxCssKb": { "$ref": "#/$defs/positiveKb" },
         "maxAssetKb": { "$ref": "#/$defs/positiveKb" },
+        "maxTotalAssetsKb": { "$ref": "#/$defs/positiveKb" },
         "maxChunkKb": { "$ref": "#/$defs/positiveKb" }
       }
     },

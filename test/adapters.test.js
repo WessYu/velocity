@@ -17,10 +17,11 @@ async function fixture(manifest = null) {
   return { root, cleanup: () => rm(root, { recursive: true, force: true }) };
 }
 
-test("detects framework adapters by dependencies and config files with correct precedence", async () => {
+test("detects adapters without confusing plain React with Create React App", async () => {
   const next = await fixture({ dependencies: { next: "16", vite: "7", react: "19" } });
   const vite = await fixture({ devDependencies: { vite: "7", react: "19" } });
   const react = await fixture({ peerDependencies: { react: "19" } });
+  const cra = await fixture({ dependencies: { react: "19", "react-scripts": "5" } });
   const generic = await fixture({});
   const nextConfig = await fixture();
   const viteConfig = await fixture();
@@ -30,14 +31,15 @@ test("detects framework adapters by dependencies and config files with correct p
     assert.equal((await detectAdapter(next.root)).id, "next");
     assert.equal((await detectAdapter(vite.root)).id, "vite");
     assert.equal((await detectAdapter(react.root)).id, "react");
+    assert.equal((await detectAdapter(cra.root)).id, "cra");
     assert.equal((await detectAdapter(generic.root)).id, "javascript");
     assert.equal((await detectAdapter(nextConfig.root)).id, "next");
     assert.equal((await detectAdapter(viteConfig.root)).id, "vite");
-    assert.ok(adapterCapabilities(await detectAdapter(next.root)).capabilities.includes("routes"));
+    assert.ok(adapterCapabilities(await detectAdapter(next.root)).capabilities.includes("route-attribution"));
     assert.ok(adapterCapabilities(await detectAdapter(vite.root)).capabilities.includes("vite-manifest"));
-    assert.equal(adapterCapabilities(await detectAdapter(generic.root)).capabilities.includes("routes"), false);
+    assert.equal(adapterCapabilities(await detectAdapter(generic.root)).capabilities.includes("lazy-loading"), false);
   } finally {
-    await Promise.all([next, vite, react, generic, nextConfig, viteConfig].map((item) => item.cleanup()));
+    await Promise.all([next, vite, react, cra, generic, nextConfig, viteConfig].map((item) => item.cleanup()));
   }
 });
 
@@ -64,44 +66,53 @@ test("Vite adapter falls back heuristically and follows manifest imports, css an
   } finally { await item.cleanup(); }
 });
 
-test("Next adapter handles missing and complete manifests and computes route sizes", async () => {
+test("Next adapter uses manifests and never fabricates unavailable route sizes", async () => {
   const item = await fixture({ dependencies: { next: "16" } });
   try {
     const adapter = await detectAdapter(item.root);
     const output = path.join(item.root, ".next", "static");
     await mkdir(output, { recursive: true });
-    assert.deepEqual([...await adapter.initialFiles(item.root, output, artifacts)], ["main.js"]);
+    assert.deepEqual([...await adapter.initialFiles(item.root, output, artifacts)], []);
     await mkdir(path.join(item.root, ".next"), { recursive: true });
     await writeFile(path.join(item.root, ".next", "build-manifest.json"), JSON.stringify({
       polyfillFiles: ["static/poly.js"],
       rootMainFiles: ["static/main.js"],
       pages: { "/_app": ["static/app.js"], "/": ["/_next/static/main.js"], "/about": ["static/chunks/lazy.js", "static/missing.js"] }
     }));
-    await writeFile(path.join(item.root, ".next", "app-path-routes-manifest.json"), JSON.stringify({ "app/page": "/app" }));
+    await writeFile(path.join(item.root, ".next", "app-build-manifest.json"), JSON.stringify({ pages: { "/page": ["static/main.js"], "/unavailable/page": ["static/missing.js"] } }));
+    await writeFile(path.join(item.root, ".next", "app-path-routes-manifest.json"), JSON.stringify({ "/page": "/", "/unavailable/page": "/unavailable" }));
     const initial = await adapter.initialFiles(item.root, output, artifacts);
-    assert.deepEqual([...initial].sort(), ["app.js", "main.js", "poly.js"]);
+    assert.ok(initial.has("main.js"));
     const insight = await adapter.insights(item.root, output, artifacts);
     const about = insight.routes.find((route) => route.route === "/about");
-    assert.equal(about.rawBytes, 80);
-    assert.equal(about.brotliBytes, 40);
-    assert.ok(insight.routes.some((route) => route.route === "/app" && route.source === "app/page"));
+    assert.equal(about.rawBytes, null);
+    assert.equal(about.brotliBytes, null);
+    assert.equal(about.available, false);
+    const appRoot = insight.routes.find((route) => route.router === "app" && route.route === "/");
+    assert.equal(appRoot.rawBytes, 100);
+    assert.equal(appRoot.available, true);
+    const unavailable = insight.routes.find((route) => route.route === "/unavailable");
+    assert.equal(unavailable.rawBytes, null);
     assert.deepEqual(insight.entries, ["main.js"]);
   } finally { await item.cleanup(); }
 });
 
-test("React and generic adapters cover manifest and heuristic entry selection", async () => {
+test("plain React uses generic output heuristics while CRA uses asset-manifest", async () => {
   const react = await fixture({ dependencies: { react: "19" } });
+  const cra = await fixture({ dependencies: { react: "19", "react-scripts": "5" } });
   const generic = await fixture({ dependencies: { leftpad: "1" } });
   try {
     const reactAdapter = await detectAdapter(react.root);
-    const build = path.join(react.root, "build");
+    assert.equal(reactAdapter.outputDirectory, "dist");
+    assert.deepEqual([...await reactAdapter.initialFiles(react.root, path.join(react.root, "dist"), artifacts)], ["main.js"]);
+
+    const craAdapter = await detectAdapter(cra.root);
+    const build = path.join(cra.root, "build");
     await mkdir(build, { recursive: true });
-    const fallbackArtifacts = [{ file: "vendor.js", category: "javascript", initial: false, rawBytes: 1, brotliBytes: 1 }, { file: "chunks/nested.js", category: "javascript", initial: false, rawBytes: 1, brotliBytes: 1 }];
-    assert.deepEqual([...await reactAdapter.initialFiles(react.root, build, fallbackArtifacts)], ["vendor.js"]);
     await writeFile(path.join(build, "asset-manifest.json"), JSON.stringify({ entrypoints: ["/main.js", "/style.css"] }));
-    assert.deepEqual([...await reactAdapter.initialFiles(react.root, build, artifacts)], ["main.js", "style.css"]);
-    const reactInsight = await reactAdapter.insights(react.root, build, artifacts);
-    assert.deepEqual(reactInsight.entries, ["/main.js", "/style.css"]);
+    assert.deepEqual([...await craAdapter.initialFiles(cra.root, build, artifacts)], ["main.js", "style.css"]);
+    const craInsight = await craAdapter.insights(cra.root, build, artifacts);
+    assert.deepEqual(craInsight.entries, ["/main.js", "/style.css"]);
 
     const genericAdapter = await detectAdapter(generic.root);
     assert.deepEqual([...await genericAdapter.initialFiles(generic.root, path.join(generic.root, "dist"), artifacts)], ["main.js"]);
@@ -110,7 +121,7 @@ test("React and generic adapters cover manifest and heuristic entry selection", 
 
     const enriched = await adapterInsights({ ...genericAdapter, manifest: { dependencies: { zeta: "2" }, devDependencies: { alpha: "1" } } }, generic.root, path.join(generic.root, "dist"), artifacts);
     assert.deepEqual(enriched.dependencies, [{ name: "alpha", version: "1" }, { name: "zeta", version: "2" }]);
-  } finally { await Promise.all([react.cleanup(), generic.cleanup()]); }
+  } finally { await Promise.all([react.cleanup(), cra.cleanup(), generic.cleanup()]); }
 });
 
 test("invalid package and manifest JSON degrade safely to the generic heuristics", async () => {

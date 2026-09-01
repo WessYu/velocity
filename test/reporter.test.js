@@ -73,15 +73,16 @@ test("build and load formatters cover budgets, finite/infinite deltas and metric
   assert.match(buildText, /infinite%/);
   assert.doesNotMatch(formatBuildComparison({ ...buildComparison, budgetViolations: [] }), /BUDGET FAILED/);
 
-  const measured = { fcpMs: 100, lcpMs: 200, cls: 0.1234, tbtMs: 30, speedIndexMs: 150, ttfbMs: 50, requests: 7, transferBytes: 4096 };
+  const measured = { fcpMs: 100, lcpMs: 200, cls: 0.1234, tbtMs: 30, visualProgressIndexMs: 150, ttfbMs: 50, requests: 7, transferBytes: 4096 };
   const metrics = Object.fromEntries(Object.keys(measured).map((key, index) => [key, { coefficientOfVariation: index === 0 ? 0.3 : 0.1 }]));
-  const load = { device: "mobile", url: "https://example.test", runs: 1, measured, metrics, recommendations: [] };
+  const load = { device: "mobile", url: "https://example.test", runs: 1, measured, metrics, methodology: { visualProgressIndex: "separate navigation approximation" }, recommendations: [] };
   const loadText = formatLoad(load);
   assert.match(loadText, /1 measured run\n/);
   assert.match(loadText, /0\.123/);
   assert.match(loadText, /7/);
   assert.match(loadText, /4\.0 KiB/);
   assert.match(loadText, /unstable/);
+  assert.match(loadText, /not Lighthouse Speed Index/);
   assert.match(loadText, /No threshold-based recommendations/);
   const recommendation = { title: "LCP", recommendation: "Improve hero delivery" };
   assert.match(formatLoad({ ...load, runs: 2, recommendations: [recommendation] }), /2 measured runs/);
@@ -95,7 +96,7 @@ test("optimization and verification formatters cover optional patches, locations
   const plan = {
     framework: "Vite",
     evidence: { sourceFiles: 2 },
-    optimizations: [{ classification: "safe-fix", id: "size-image-1", title: "Size image", evidence: "known dimensions", expectedImpact: "less CLS", risk: "low", files: ["src/a.jsx"], diff: "Index: src/a.jsx\n+ width" }, { classification: "review-required", id: "script-1", title: "Script", evidence: "blocking", expectedImpact: "FCP", risk: "order", files: ["src/b.jsx"], diff: null }],
+    optimizations: [{ classification: "review-required", id: "size-image-1", title: "Size image", evidence: "known dimensions", expectedImpact: "less CLS", risk: "low", files: ["src/a.jsx"], diff: "Index: src/a.jsx\n+ width" }, { classification: "review-required", id: "script-1", title: "Script", evidence: "blocking", expectedImpact: "FCP", risk: "order", files: ["src/b.jsx"], diff: null }],
     findings: [{ classification: "recommendation", id: "with-location", file: "src/a.jsx", line: 3, evidence: "x", recommendation: "y" }, { classification: "recommendation", id: "file-only", file: "src/b.jsx", line: null, evidence: "x", recommendation: "y" }, { classification: "recommendation", id: "global", file: null, line: null, evidence: "x", recommendation: "y" }]
   };
   const planText = formatOptimizationPlan(plan);
