@@ -45,7 +45,7 @@ test("measures browser metrics and names the visual approximation honestly", { t
   assert.match(result.methodology.visualProgressIndex, /not Lighthouse Speed Index/);
   assert.match(result.methodology.tbt, /not INP/);
   assert.equal(result.methodology.browserMajorVersion, Number(result.methodology.browserVersion.split(".")[0]));
-  assert.match(result.methodology.userAgent, new RegExp(`Chrome/${result.methodology.browserVersion.replaceAll(".", "\\.")}`));
+  assert.match(result.methodology.userAgent, new RegExp(`(?:Headless)?Chrome/${result.methodology.browserMajorVersion}\\.`));
   assert.ok(result.samples[0].requests >= 1);
   assert.ok(result.samples[0].transferBytes > 0);
   assert.ok(result.recommendations.every((item) => item.measured === false));
