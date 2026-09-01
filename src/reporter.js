@@ -90,7 +90,7 @@ export function formatLoad(report) {
     const cv = report.metrics[key]?.coefficientOfVariation;
     output.push(`${label.padEnd(22)} ${formatted}${Number.isFinite(cv) && cv > 0.2 ? " (unstable)" : ""}`);
   }
-  if (report.methodology.visualProgressIndex) output.push("", "visualProgressIndexMs is a Velocity approximation collected in a separate navigation; it is not Lighthouse Speed Index.");
+  if (report.methodology?.visualProgressIndex) output.push("", "visualProgressIndexMs is a Velocity approximation collected in a separate navigation; it is not Lighthouse Speed Index.");
   output.push("", "Recommendations (not measured metrics)");
   if (!report.recommendations.length) output.push("No threshold-based recommendations.");
   for (const item of report.recommendations) output.push(`- ${item.title}: ${item.recommendation}`);
