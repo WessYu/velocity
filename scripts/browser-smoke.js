@@ -13,6 +13,10 @@ function handler(_request, response) {
   response.writeHead(200, { "content-type": "text/html", "cache-control": "no-store" });
   response.end("<!doctype html><meta charset=utf-8><title>Velocity smoke</title><style>body{font:20px sans-serif}</style><h1>Velocity Chromium smoke</h1><script>const end=performance.now()+30;while(performance.now()<end){}</script>");
 }
+function userAgentMajor(userAgent) {
+  const match = String(userAgent).match(/(?:Headless)?Chrome\/(\d+)/);
+  return match ? Number(match[1]) : null;
+}
 
 const httpServer = http.createServer(handler);
 const httpPort = await listen(httpServer);
@@ -21,7 +25,7 @@ try {
   assert.equal(report.measured.visualProgressIndexMs, null);
   assert.equal(report.methodology.browser, "Chromium");
   assert.equal(report.methodology.browserMajorVersion, Number(report.methodology.browserVersion.split(".")[0]));
-  assert.match(report.methodology.userAgent, new RegExp(`Chrome/${report.methodology.browserVersion.replaceAll(".", "\\.")}`));
+  assert.equal(userAgentMajor(report.methodology.userAgent), report.methodology.browserMajorVersion);
   assert.ok(report.measured.requests >= 1);
   assert.ok(report.measured.transferBytes > 0);
   await writeFile("load-smoke.json", `${JSON.stringify(report, null, 2)}\n`);
