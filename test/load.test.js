@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
-import { compareLoads, measureLoad } from "../src/load.js";
+import { buildLoadRecommendations, compareLoads, measureLoad } from "../src/load.js";
 
 function report(overrides = {}) {
   const measured = { fcpMs: 1000, lcpMs: 1500, cls: 0.02, tbtMs: 100, visualProgressIndexMs: 1300, ttfbMs: 100, requests: 5, transferBytes: 1000, ...(overrides.measured ?? {}) };
@@ -80,6 +80,21 @@ test("classifies compatible load comparisons and gates environment overrides", (
   assert.equal(overridden.classification, "inconclusive");
   assert.ok(overridden.environmentMismatches.some((item) => item.field === "device"));
   assert.throws(() => compareLoads(baseline, report({ methodology: { ...baseline.methodology, protocol: "old" } })), /methodologies differ/);
+});
+
+test("builds load recommendations safely from finite measured metrics", () => {
+  const unavailable = { lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, requests: null, transferBytes: null };
+  assert.deepEqual(buildLoadRecommendations(unavailable), []);
+
+  const thresholds = { lcpMs: 2500, cls: 0.1, tbtMs: 200, ttfbMs: 800, requests: 75, transferBytes: 1.5 * 1024 * 1024 };
+  assert.deepEqual(buildLoadRecommendations(thresholds), []);
+
+  const triggered = buildLoadRecommendations({ lcpMs: 2601, cls: 0.101, tbtMs: 201, ttfbMs: 801, requests: 76, transferBytes: 2 * 1024 * 1024 });
+  assert.deepEqual(triggered.map((item) => item.id), ["load/lcp", "load/cls", "load/tbt", "load/ttfb", "load/requests", "load/bytes"]);
+  assert.ok(triggered.every((item) => item.measured === false));
+  assert.match(triggered[0].evidence, /2601 ms measured/);
+  assert.match(triggered[1].evidence, /0\.101 measured/);
+  assert.match(triggered[5].evidence, /2048 KiB transferred/);
 });
 
 test("validates real-load input options", async () => {

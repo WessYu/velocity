@@ -63,15 +63,14 @@ function throttlingFor(device) { return device === "mobile" ? { latencyMs: 150, 
 function chromiumMajor(version) { return Number.parseInt(String(version).split(".")[0], 10) || null; }
 function mobileUserAgent(version) { return `Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Mobile Safari/537.36`; }
 
-function recommendations(metrics) {
+export function buildLoadRecommendations(metrics) {
   const output = [];
-  const add = (condition, id, title, evidence, recommendation) => { if (condition) output.push({ id, title, evidence, recommendation, measured: false }); };
-  add(Number.isFinite(metrics.lcpMs) && metrics.lcpMs > 2500, "load/lcp", "Largest Contentful Paint is above 2.5 s", `${metrics.lcpMs.toFixed(0)} ms measured`, "Prioritize the LCP resource and remove render-blocking work; verify with another load run.");
-  add(Number.isFinite(metrics.cls) && metrics.cls > 0.1, "load/cls", "Cumulative Layout Shift is above 0.1", `${metrics.cls.toFixed(3)} measured`, "Reserve dimensions for images, ads, and embedded content.");
-  add(Number.isFinite(metrics.tbtMs) && metrics.tbtMs > 200, "load/tbt", "Total Blocking Time is above 200 ms", `${metrics.tbtMs.toFixed(0)} ms measured`, "Reduce or defer long main-thread tasks. TBT is a lab metric and is not INP.");
-  add(Number.isFinite(metrics.ttfbMs) && metrics.ttfbMs > 800, "load/ttfb", "Server response is slow", `${metrics.ttfbMs.toFixed(0)} ms TTFB measured`, "Measure server, cache, and network contributions separately.");
-  add(Number.isFinite(metrics.requests) && metrics.requests > 75, "load/requests", "High request count", `${metrics.requests} requests measured`, "Remove unnecessary requests or load non-critical resources later.");
-  add(Number.isFinite(metrics.transferBytes) && metrics.transferBytes > 1.5 * 1024 * 1024, "load/bytes", "Large transferred payload", `${(metrics.transferBytes / 1024).toFixed(0)} KiB transferred`, "Inspect the largest scripts, images, and fonts before changing delivery.");
+  if (Number.isFinite(metrics.lcpMs) && metrics.lcpMs > 2500) output.push({ id: "load/lcp", title: "Largest Contentful Paint is above 2.5 s", evidence: `${metrics.lcpMs.toFixed(0)} ms measured`, recommendation: "Prioritize the LCP resource and remove render-blocking work; verify with another load run.", measured: false });
+  if (Number.isFinite(metrics.cls) && metrics.cls > 0.1) output.push({ id: "load/cls", title: "Cumulative Layout Shift is above 0.1", evidence: `${metrics.cls.toFixed(3)} measured`, recommendation: "Reserve dimensions for images, ads, and embedded content.", measured: false });
+  if (Number.isFinite(metrics.tbtMs) && metrics.tbtMs > 200) output.push({ id: "load/tbt", title: "Total Blocking Time is above 200 ms", evidence: `${metrics.tbtMs.toFixed(0)} ms measured`, recommendation: "Reduce or defer long main-thread tasks. TBT is a lab metric and is not INP.", measured: false });
+  if (Number.isFinite(metrics.ttfbMs) && metrics.ttfbMs > 800) output.push({ id: "load/ttfb", title: "Server response is slow", evidence: `${metrics.ttfbMs.toFixed(0)} ms TTFB measured`, recommendation: "Measure server, cache, and network contributions separately.", measured: false });
+  if (Number.isFinite(metrics.requests) && metrics.requests > 75) output.push({ id: "load/requests", title: "High request count", evidence: `${metrics.requests} requests measured`, recommendation: "Remove unnecessary requests or load non-critical resources later.", measured: false });
+  if (Number.isFinite(metrics.transferBytes) && metrics.transferBytes > 1.5 * 1024 * 1024) output.push({ id: "load/bytes", title: "Large transferred payload", evidence: `${(metrics.transferBytes / 1024).toFixed(0)} KiB transferred`, recommendation: "Inspect the largest scripts, images, and fonts before changing delivery.", measured: false });
   return output;
 }
 
@@ -227,7 +226,7 @@ export async function measureLoad(url, options = {}) {
     metrics,
     measured,
     unstable,
-    recommendations: recommendations(measured)
+    recommendations: buildLoadRecommendations(measured)
   };
 }
 
