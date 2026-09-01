@@ -376,7 +376,7 @@ CI runs cross-platform tests, self-analysis, coverage gates, schema validation, 
 
 ## Release engineering
 
-Publishing is isolated in `.github/workflows/publish.yml` and does not happen from ordinary CI pushes. A release commit on `main` or an explicit manual dispatch runs the complete package gate, validates the exact package/changelog identity, checks whether npm already owns the version and commit, runs the real-browser smoke, compares dry-run and actual tarball contents, inspects and installs the exact tarball outside the repository, publishes that validated tarball through npm Trusted Publishing/OIDC, verifies npm `gitHead`, and creates the matching GitHub Release from non-empty changelog notes.
+Publishing is isolated in `.github/workflows/publish.yml` and does not happen from ordinary CI pushes. A release commit on `main` or an explicit manual dispatch runs the complete package gate, validates the exact package/changelog identity, checks whether npm already owns the version and commit, runs the real-browser smoke, compares dry-run and actual tarball contents, inspects and installs the exact tarball outside the repository, publishes the validated release checkout through npm Trusted Publishing/OIDC, verifies both npm `gitHead` and the published tarball integrity against the validated package, and creates the matching GitHub Release from non-empty changelog notes.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md).
 
