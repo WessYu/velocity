@@ -47,7 +47,8 @@ test("packaged tarball runs build, load, optimize dry-run/apply, and verify end 
 
   const planned = await invoke(["optimize", fixture.directory, "--json"]);
   assert.equal(planned.code, 0, planned.stderr);
-  const fix = JSON.parse(planned.stdout).optimizations.find((item) => item.classification === "safe-fix");
+  const fix = JSON.parse(planned.stdout).optimizations.find((item) => item.classification === "review-required");
+  assert.ok(fix, "expected at least one review-required optimization in the fixture");
   const applied = await invoke(["optimize", fixture.directory, "--apply", "--fix", fix.id, "--json"]);
   assert.equal(applied.code, 0, applied.stderr); assert.equal(JSON.parse(applied.stdout).kind, "optimization-run");
   const verified = await invoke(["verify", fixture.directory, "--json"]);
