@@ -97,7 +97,8 @@ test("init writes valid minimal config and refuses overwrite", async () => {
 test("covers global aliases, option parser edge cases and command validation", async () => {
   assert.match((await run([])).stdout, /Velocity/);
   assert.match((await run(["-h"])).stdout, /Usage:/);
-  assert.match((await run(["-v"])).stdout, /^0\.3\.0/m);
+  const manifest = JSON.parse(await readFile(path.resolve("package.json"), "utf8"));
+  assert.equal((await run(["-v"])).stdout.trim(), manifest.version);
 
   const versionArgs = await run(["--version", "extra"]);
   assert.equal(versionArgs.code, 2); assert.match(versionArgs.stderr, /does not accept arguments/);
