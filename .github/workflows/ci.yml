@@ -85,7 +85,9 @@ jobs:
         run: node node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Resolve the exact Chromium executable
         shell: bash
-        run: echo "CHROME_PATH=$(node --input-type=module -e \"import { chromium } from 'playwright-core'; process.stdout.write(chromium.executablePath())\")" >> "$GITHUB_ENV"
+        run: |
+          chrome_path=$(node --input-type=module -e "import { chromium } from 'playwright-core'; process.stdout.write(chromium.executablePath())")
+          printf 'CHROME_PATH=%s\n' "$chrome_path" >> "$GITHUB_ENV"
       - name: Generate a local self-signed certificate
         shell: bash
         run: |
