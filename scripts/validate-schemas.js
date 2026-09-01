@@ -60,7 +60,7 @@ async function validateSchemaDocuments() {
     const schema = await readJson(path.join(directory, file));
     if (schema.$schema !== "https://json-schema.org/draft/2020-12/schema") throw new Error(`${file}: expected JSON Schema draft 2020-12`);
     if (typeof schema.$id !== "string" || !schema.$id.includes(`/schemas/${file}`)) throw new Error(`${file}: invalid or mismatched $id`);
-    const refs = JSON.stringify(schema).match(/#\/[A-Za-z0-9_~\/-]+/g) ?? [];
+    const refs = JSON.stringify(schema).match(/#\/[A-Za-z0-9_~/-]+/g) ?? [];
     for (const reference of refs) if (!resolveRef(schema, reference)) throw new Error(`${file}: unresolved local ref ${reference}`);
   }
   process.stdout.write(`Validated ${files.length} schema documents.\n`);
