@@ -1,0 +1,82 @@
+name: Patch final load portability and coverage
+
+on:
+  push:
+    branches: [release/0.3.1-hardening]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: release/0.3.1-hardening
+      - name: Patch load recommendation safety and tests
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const loadPath = 'src/load.js';
+          let load = fs.readFileSync(loadPath, 'utf8');
+          const oldRecommendations = `function recommendations(metrics) {
+            const output = [];
+            const add = (condition, id, title, evidence, recommendation) => { if (condition) output.push({ id, title, evidence, recommendation, measured: false }); };
+            add(Number.isFinite(metrics.lcpMs) && metrics.lcpMs > 2500, "load/lcp", "Largest Contentful Paint is above 2.5 s", \`${'${metrics.lcpMs.toFixed(0)}'} ms measured\`, "Prioritize the LCP resource and remove render-blocking work; verify with another load run.");
+            add(Number.isFinite(metrics.cls) && metrics.cls > 0.1, "load/cls", "Cumulative Layout Shift is above 0.1", \`${'${metrics.cls.toFixed(3)}'} measured\`, "Reserve dimensions for images, ads, and embedded content.");
+            add(Number.isFinite(metrics.tbtMs) && metrics.tbtMs > 200, "load/tbt", "Total Blocking Time is above 200 ms", \`${'${metrics.tbtMs.toFixed(0)}'} ms measured\`, "Reduce or defer long main-thread tasks. TBT is a lab metric and is not INP.");
+            add(Number.isFinite(metrics.ttfbMs) && metrics.ttfbMs > 800, "load/ttfb", "Server response is slow", \`${'${metrics.ttfbMs.toFixed(0)}'} ms TTFB measured\`, "Measure server, cache, and network contributions separately.");
+            add(Number.isFinite(metrics.requests) && metrics.requests > 75, "load/requests", "High request count", \`${'${metrics.requests}'} requests measured\`, "Remove unnecessary requests or load non-critical resources later.");
+            add(Number.isFinite(metrics.transferBytes) && metrics.transferBytes > 1.5 * 1024 * 1024, "load/bytes", "Large transferred payload", \`${'${(metrics.transferBytes / 1024).toFixed(0)}'} KiB transferred\`, "Inspect the largest scripts, images, and fonts before changing delivery.");
+            return output;
+          }`;
+          const newRecommendations = `export function buildLoadRecommendations(metrics) {
+            const output = [];
+            if (Number.isFinite(metrics.lcpMs) && metrics.lcpMs > 2500) output.push({ id: "load/lcp", title: "Largest Contentful Paint is above 2.5 s", evidence: \`${'${metrics.lcpMs.toFixed(0)}'} ms measured\`, recommendation: "Prioritize the LCP resource and remove render-blocking work; verify with another load run.", measured: false });
+            if (Number.isFinite(metrics.cls) && metrics.cls > 0.1) output.push({ id: "load/cls", title: "Cumulative Layout Shift is above 0.1", evidence: \`${'${metrics.cls.toFixed(3)}'} measured\`, recommendation: "Reserve dimensions for images, ads, and embedded content.", measured: false });
+            if (Number.isFinite(metrics.tbtMs) && metrics.tbtMs > 200) output.push({ id: "load/tbt", title: "Total Blocking Time is above 200 ms", evidence: \`${'${metrics.tbtMs.toFixed(0)}'} ms measured\`, recommendation: "Reduce or defer long main-thread tasks. TBT is a lab metric and is not INP.", measured: false });
+            if (Number.isFinite(metrics.ttfbMs) && metrics.ttfbMs > 800) output.push({ id: "load/ttfb", title: "Server response is slow", evidence: \`${'${metrics.ttfbMs.toFixed(0)}'} ms TTFB measured\`, recommendation: "Measure server, cache, and network contributions separately.", measured: false });
+            if (Number.isFinite(metrics.requests) && metrics.requests > 75) output.push({ id: "load/requests", title: "High request count", evidence: \`${'${metrics.requests}'} requests measured\`, recommendation: "Remove unnecessary requests or load non-critical resources later.", measured: false });
+            if (Number.isFinite(metrics.transferBytes) && metrics.transferBytes > 1.5 * 1024 * 1024) output.push({ id: "load/bytes", title: "Large transferred payload", evidence: \`${'${(metrics.transferBytes / 1024).toFixed(0)}'} KiB transferred\`, recommendation: "Inspect the largest scripts, images, and fonts before changing delivery.", measured: false });
+            return output;
+          }`;
+          if (!load.includes(oldRecommendations)) throw new Error('recommendations block not found');
+          load = load.replace(oldRecommendations, newRecommendations);
+          load = load.replace('recommendations: recommendations(measured)', 'recommendations: buildLoadRecommendations(measured)');
+          fs.writeFileSync(loadPath, load);
+
+          const testPath = 'test/load.test.js';
+          let tests = fs.readFileSync(testPath, 'utf8');
+          tests = tests.replace('import { compareLoads, measureLoad } from "../src/load.js";', 'import { buildLoadRecommendations, compareLoads, measureLoad } from "../src/load.js";');
+          const marker = '\ntest("validates real-load input options", async () => {';
+          const added = `\ntest("builds load recommendations safely from finite measured metrics", () => {
+            const unavailable = { lcpMs: null, cls: null, tbtMs: null, ttfbMs: null, requests: null, transferBytes: null };
+            assert.deepEqual(buildLoadRecommendations(unavailable), []);
+
+            const thresholds = { lcpMs: 2500, cls: 0.1, tbtMs: 200, ttfbMs: 800, requests: 75, transferBytes: 1.5 * 1024 * 1024 };
+            assert.deepEqual(buildLoadRecommendations(thresholds), []);
+
+            const triggered = buildLoadRecommendations({ lcpMs: 2601, cls: 0.101, tbtMs: 201, ttfbMs: 801, requests: 76, transferBytes: 2 * 1024 * 1024 });
+            assert.deepEqual(triggered.map((item) => item.id), ["load/lcp", "load/cls", "load/tbt", "load/ttfb", "load/requests", "load/bytes"]);
+            assert.ok(triggered.every((item) => item.measured === false));
+            assert.match(triggered[0].evidence, /2601 ms measured/);
+            assert.match(triggered[1].evidence, /0\\.101 measured/);
+            assert.match(triggered[5].evidence, /2048 KiB transferred/);
+          });\n`;
+          if (!tests.includes(marker)) throw new Error('load test marker not found');
+          tests = tests.replace(marker, added + marker);
+          fs.writeFileSync(testPath, tests);
+          NODE
+      - name: Commit patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/load.js test/load.test.js
+          git commit -m "fix: handle unavailable load recommendation metrics"
+          git push origin HEAD:release/0.3.1-hardening
