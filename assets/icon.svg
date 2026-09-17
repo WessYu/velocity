@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Velocity icon</title>
+  <desc id="desc">Minimal monochrome velocity mark on a dark rounded square.</desc>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="#0A0A0A"/>
+  <rect x="9" y="9" width="238" height="238" rx="51" fill="none" stroke="#2A2D31" stroke-width="2"/>
+  <path d="M52 83h88l-12 17H67z" fill="#F4F4F2"/>
+  <path d="M70 111h59l-12 17H86z" fill="#D8D9DB"/>
+  <path d="M91 139h27l-12 17H96z" fill="#8D9196"/>
+  <path d="M147 83h34l-50 90H97l21-37 18-31z" fill="#F4F4F2"/>
+</svg>
