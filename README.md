@@ -1,5 +1,9 @@
 # Velocity
 
+<p align="center">
+  <img src="./assets/icon.svg" alt="Velocity" width="96" />
+</p>
+
 <p align="left">
   <a href="https://www.npmjs.com/package/@wess2001/velocity"><img alt="npm version" src="https://img.shields.io/npm/v/%40wess2001%2Fvelocity?logo=npm&label=npm"></a>
   <a href="https://github.com/WessYu/velocity/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/WessYu/velocity/ci.yml?branch=main&label=CI&logo=github"></a>
