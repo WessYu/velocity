@@ -1,4 +1,4 @@
-name: CLI Proof
+name: Real Terminal Proof
 
 on:
   workflow_dispatch:
@@ -11,10 +11,9 @@ permissions:
 jobs:
   proof:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
-      PROOF_TITLE: "VELOCITY · FINDINGS → SCORE → GATE"
-      PROOF_SUBTITLE: "real problematic API fixture"
+      PROOF_TITLE: "Velocity — real CLI"
 
     steps:
       - uses: actions/checkout@v4
@@ -23,78 +22,65 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Analyze problematic API and enforce score
-        shell: bash
+
+      - name: Prepare real CLI commands
         run: |
-          mkdir -p artifacts
+          cat > /tmp/run-proof.sh <<'SH'
+          #!/usr/bin/env bash
+          cd "$GITHUB_WORKSPACE"
+          clear
           {
-            echo '$ velocity analyze examples/problematic-api --no-color'
+            printf '$ node bin/velocity.js analyze examples/problematic-api --no-color\n\n'
             node bin/velocity.js analyze examples/problematic-api --no-color
-            echo
-            echo '$ velocity check examples/problematic-api --min-score 90 --no-color'
+            printf '\n$ node bin/velocity.js check examples/problematic-api --min-score 90 --no-color\n\n'
             set +e
             node bin/velocity.js check examples/problematic-api --min-score 90 --no-color
             CODE=$?
             set -e
-            echo
-            echo "[exit=$CODE] regression gate expected to block this fixture"
-            test "$CODE" -eq 1
+            printf '\nexit=%s  ← gate blocks the problematic fixture\n' "$CODE"
           } 2>&1 | tee artifacts/proof.txt
+          touch /tmp/proof.done
+          exit 0
+          SH
 
-      - name: Render CLI proof
+      - name: Install terminal screenshot tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xterm scrot
+
+      - name: Capture actual terminal window
         shell: bash
         run: |
-          node <<'NODE'
-          import fs from 'node:fs'
+          mkdir -p artifacts
+          chmod +x /tmp/run-proof.sh
+          Xvfb :99 -screen 0 1440x900x24 -ac >/tmp/xvfb.log 2>&1 &
+          XVFB_PID=$!
+          export DISPLAY=:99
+          sleep 1
 
-          const source = fs.readFileSync('artifacts/proof.txt', 'utf8')
-            .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -\/]*[@-~])/g, '')
-          const rawLines = source.split(/\r?\n/)
-          const maxLines = 52
-          const lines = rawLines.slice(0, maxLines)
-          if (rawLines.length > maxLines) lines.push('… output truncated in image; full transcript is in the artifact')
-          const esc = (value) => value
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-          const clip = (value, limit = 122) => value.length > limit ? value.slice(0, limit - 1) + '…' : value
-          const lineHeight = 25
-          const top = 126
-          const height = Math.max(620, top + lines.length * lineHeight + 56)
-          const text = lines.map((line, index) => {
-            const y = top + index * lineHeight
-            const command = line.trimStart().startsWith('$')
-            const success = /PASSED|green|clean|0 findings|GATE PASSED|no new semantic violations/i.test(line)
-            const fail = /BLOCKED|GATE FAILED|blocking|HIGH|error/i.test(line) && !success
-            const fill = command ? '#f4f1ea' : success ? '#b8d8b8' : fail ? '#d9b0b0' : '#a8a8a8'
-            return `<text x="64" y="${y}" fill="${fill}" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" xml:space="preserve">${esc(clip(line)) || ' '}</text>`
-          }).join('\n')
+          xterm             -fa "DejaVu Sans Mono"             -fs 10             -geometry 166x49+0+0             -bg "#090909"             -fg "#ece9e2"             -bd "#202020"             -cr "#ece9e2"             -sb             -sl 3000             -hold             -T "$PROOF_TITLE"             -e /tmp/run-proof.sh &
+          XTERM_PID=$!
 
-          const title = esc(process.env.PROOF_TITLE || 'CLI PROOF')
-          const subtitle = esc(process.env.PROOF_SUBTITLE || 'reproducible CLI evidence')
-          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="${height}" viewBox="0 0 1440 ${height}">
-            <rect width="1440" height="${height}" fill="#070707"/>
-            <rect x="24" y="24" width="1392" height="${height - 48}" rx="18" fill="#0d0d0d" stroke="#292929"/>
-            <circle cx="56" cy="54" r="6" fill="#5a5a5a"/>
-            <circle cx="78" cy="54" r="6" fill="#5a5a5a"/>
-            <circle cx="100" cy="54" r="6" fill="#5a5a5a"/>
-            <text x="64" y="92" fill="#f4f1ea" font-size="20" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace">${title}</text>
-            <text x="1376" y="92" fill="#6f6f6f" text-anchor="end" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace">${subtitle}</text>
-            ${text}
-          </svg>`
-          fs.writeFileSync('artifacts/proof.svg', svg)
-          fs.writeFileSync('artifacts/proof-height.txt', String(height))
-          NODE
+          for i in $(seq 1 120); do
+            if [ -f /tmp/proof.done ]; then break; fi
+            sleep 0.5
+          done
 
-          HEIGHT="$(cat artifacts/proof-height.txt)"
-          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
-          "$CHROME"             --headless=new             --no-sandbox             --disable-gpu             --hide-scrollbars             --window-size=1440,"$HEIGHT"             --screenshot=artifacts/proof.png             "file://$GITHUB_WORKSPACE/artifacts/proof.svg"
+          test -f /tmp/proof.done
+          sleep 1
+          scrot -z artifacts/terminal.png
 
-      - name: Upload proof
+          kill "$XTERM_PID" 2>/dev/null || true
+          kill "$XVFB_PID" 2>/dev/null || true
+
+          file artifacts/terminal.png
+
+      - name: Upload real terminal evidence
         uses: actions/upload-artifact@v4
         with:
-          name: cli-proof
-          path: artifacts/
+          name: real-terminal-proof
+          path: |
+            artifacts/terminal.png
+            artifacts/proof.txt
           if-no-files-found: error
           retention-days: 30
