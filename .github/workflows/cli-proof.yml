@@ -1,0 +1,100 @@
+name: CLI Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROOF_TITLE: "VELOCITY · FINDINGS → SCORE → GATE"
+      PROOF_SUBTITLE: "real problematic API fixture"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Analyze problematic API and enforce score
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          {
+            echo '$ velocity analyze examples/problematic-api --no-color'
+            node bin/velocity.js analyze examples/problematic-api --no-color
+            echo
+            echo '$ velocity check examples/problematic-api --min-score 90 --no-color'
+            set +e
+            node bin/velocity.js check examples/problematic-api --min-score 90 --no-color
+            CODE=$?
+            set -e
+            echo
+            echo "[exit=$CODE] regression gate expected to block this fixture"
+            test "$CODE" -eq 1
+          } 2>&1 | tee artifacts/proof.txt
+
+      - name: Render CLI proof
+        shell: bash
+        run: |
+          node <<'NODE'
+          import fs from 'node:fs'
+
+          const source = fs.readFileSync('artifacts/proof.txt', 'utf8')
+            .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -\/]*[@-~])/g, '')
+          const rawLines = source.split(/\r?\n/)
+          const maxLines = 52
+          const lines = rawLines.slice(0, maxLines)
+          if (rawLines.length > maxLines) lines.push('… output truncated in image; full transcript is in the artifact')
+          const esc = (value) => value
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+          const clip = (value, limit = 122) => value.length > limit ? value.slice(0, limit - 1) + '…' : value
+          const lineHeight = 25
+          const top = 126
+          const height = Math.max(620, top + lines.length * lineHeight + 56)
+          const text = lines.map((line, index) => {
+            const y = top + index * lineHeight
+            const command = line.trimStart().startsWith('$')
+            const success = /PASSED|green|clean|0 findings|GATE PASSED|no new semantic violations/i.test(line)
+            const fail = /BLOCKED|GATE FAILED|blocking|HIGH|error/i.test(line) && !success
+            const fill = command ? '#f4f1ea' : success ? '#b8d8b8' : fail ? '#d9b0b0' : '#a8a8a8'
+            return `<text x="64" y="${y}" fill="${fill}" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" xml:space="preserve">${esc(clip(line)) || ' '}</text>`
+          }).join('\n')
+
+          const title = esc(process.env.PROOF_TITLE || 'CLI PROOF')
+          const subtitle = esc(process.env.PROOF_SUBTITLE || 'reproducible CLI evidence')
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="${height}" viewBox="0 0 1440 ${height}">
+            <rect width="1440" height="${height}" fill="#070707"/>
+            <rect x="24" y="24" width="1392" height="${height - 48}" rx="18" fill="#0d0d0d" stroke="#292929"/>
+            <circle cx="56" cy="54" r="6" fill="#5a5a5a"/>
+            <circle cx="78" cy="54" r="6" fill="#5a5a5a"/>
+            <circle cx="100" cy="54" r="6" fill="#5a5a5a"/>
+            <text x="64" y="92" fill="#f4f1ea" font-size="20" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace">${title}</text>
+            <text x="1376" y="92" fill="#6f6f6f" text-anchor="end" font-size="13" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace">${subtitle}</text>
+            ${text}
+          </svg>`
+          fs.writeFileSync('artifacts/proof.svg', svg)
+          fs.writeFileSync('artifacts/proof-height.txt', String(height))
+          NODE
+
+          HEIGHT="$(cat artifacts/proof-height.txt)"
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          "$CHROME"             --headless=new             --no-sandbox             --disable-gpu             --hide-scrollbars             --window-size=1440,"$HEIGHT"             --screenshot=artifacts/proof.png             "file://$GITHUB_WORKSPACE/artifacts/proof.svg"
+
+      - name: Upload proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-proof
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
