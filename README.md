@@ -16,6 +16,21 @@
 
 Velocity is a local CLI and ESM API that helps teams find likely performance risks, measure builds and browser behavior, compare compatible baselines, and fail CI when a regression exceeds an explicit budget.
 
+## Real CLI demo
+
+<p align="center">
+  <a href="https://github.com/WessYu/velocity/actions/runs/35853098962">
+    <img src="https://raw.githubusercontent.com/WessYu/WESSYU-ARQUIVO/main/public/projects/velocity/proof.gif" alt="Real Velocity CLI execution analyzing a problematic API and enforcing the performance gate" width="100%" />
+  </a>
+</p>
+
+This is an **actual terminal recording** captured from CI while Velocity analyzes the repository's deliberately problematic API fixture.
+
+**Observed in this run:** 78/100 heuristic health score · 1 error · 2 warnings · minimum-score policy gate blocked with exit code 1.
+
+[View the exact CI run that produced this recording →](https://github.com/WessYu/velocity/actions/runs/35853098962)
+
+
 It combines six parts of one workflow:
 
 - **Analyze** source code with parser-backed, binding-aware rules.
