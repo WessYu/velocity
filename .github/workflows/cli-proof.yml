@@ -31,37 +31,44 @@ jobs:
           clear
           {
             printf '$ node bin/velocity.js analyze examples/problematic-api --no-color\n\n'
+            sleep 1
             node bin/velocity.js analyze examples/problematic-api --no-color
+            sleep 1
             printf '\n$ node bin/velocity.js check examples/problematic-api --min-score 90 --no-color\n\n'
+            sleep 1
             set +e
             node bin/velocity.js check examples/problematic-api --min-score 90 --no-color
             CODE=$?
             set -e
             printf '\nexit=%s  ← gate blocks the problematic fixture\n' "$CODE"
           } 2>&1 | tee artifacts/proof.txt
+          sleep 2
           touch /tmp/proof.done
           exit 0
           SH
 
-      - name: Install terminal screenshot tools
+      - name: Install terminal capture tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb xterm scrot
+          sudo apt-get install -y -qq xvfb xterm scrot ffmpeg fonts-dejavu-core
 
       - name: Capture actual terminal window
         shell: bash
         run: |
           mkdir -p artifacts
           chmod +x /tmp/run-proof.sh
-          Xvfb :99 -screen 0 1440x900x24 -ac >/tmp/xvfb.log 2>&1 &
+          Xvfb :99 -screen 0 1280x720x24 -ac >/tmp/xvfb.log 2>&1 &
           XVFB_PID=$!
           export DISPLAY=:99
           sleep 1
 
-          xterm             -fa "DejaVu Sans Mono"             -fs 10             -geometry 166x49+0+0             -bg "#090909"             -fg "#ece9e2"             -bd "#202020"             -cr "#ece9e2"             -sb             -sl 3000             -hold             -T "$PROOF_TITLE"             -e /tmp/run-proof.sh &
+          ffmpeg -y             -f x11grab             -framerate 12             -video_size 1280x720             -i :99.0             -c:v libx264             -preset ultrafast             -crf 18             -pix_fmt yuv420p             artifacts/terminal.mp4 >/tmp/ffmpeg-capture.log 2>&1 &
+          FFMPEG_PID=$!
+
+          xterm             -fa "DejaVu Sans Mono"             -fs 10             -geometry 146x39+0+0             -bg "#090909"             -fg "#ece9e2"             -bd "#202020"             -cr "#ece9e2"             -sb             -sl 3000             -hold             -T "$PROOF_TITLE"             -e /tmp/run-proof.sh &
           XTERM_PID=$!
 
-          for i in $(seq 1 120); do
+          for i in $(seq 1 240); do
             if [ -f /tmp/proof.done ]; then break; fi
             sleep 0.5
           done
@@ -70,10 +77,15 @@ jobs:
           sleep 1
           scrot -z artifacts/terminal.png
 
+          kill -INT "$FFMPEG_PID" 2>/dev/null || true
+          wait "$FFMPEG_PID" 2>/dev/null || true
+
+          ffmpeg -y             -i artifacts/terminal.mp4             -filter_complex "[0:v]fps=10,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5"             -loop 0             artifacts/terminal.gif >/tmp/ffmpeg-gif.log 2>&1
+
           kill "$XTERM_PID" 2>/dev/null || true
           kill "$XVFB_PID" 2>/dev/null || true
 
-          file artifacts/terminal.png
+          file artifacts/terminal.png artifacts/terminal.gif artifacts/terminal.mp4
 
       - name: Upload real terminal evidence
         uses: actions/upload-artifact@v4
@@ -81,6 +93,8 @@ jobs:
           name: real-terminal-proof
           path: |
             artifacts/terminal.png
+            artifacts/terminal.gif
+            artifacts/terminal.mp4
             artifacts/proof.txt
           if-no-files-found: error
           retention-days: 30
